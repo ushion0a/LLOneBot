@@ -67,7 +67,7 @@ jobs:
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: ${{ github.event.release.tag_name }}
+          tags: $version
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
@@ -76,6 +76,4 @@ jobs:
       - name: Output build summary
         run: |
           echo "✅ Successfully built and pushed LLOneBot Docker image"
-          echo "📦 Image tags:"
-          echo "  - ${{ secrets.DOCKER_USERNAME }}/llonebot:${{ steps.version.outputs.version }}"
-          echo "  - ${{ secrets.DOCKER_USERNAME }}/llonebot:latest"
+
