@@ -71,9 +71,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
-         run: |
-            -f docker/Dockerfile \
-            .
+
 
       - name: Output build summary
         run: |
