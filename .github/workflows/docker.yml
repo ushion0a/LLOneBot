@@ -59,21 +59,18 @@ jobs:
             fi
           fi
           echo "version=$version" >> $GITHUB_OUTPUT
-
-
       - name: Build and push
         id: docker_build
         uses: docker/build-push-action@v4
         with:
           context: .
           push: ${{ github.event_name != 'pull_request' }}
-          tags: $version
+          tags: ${{ steps.version.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64,linux/arm64
 
-
       - name: Output build summary
         run: |
           echo "✅ Successfully built and pushed LLOneBot Docker image"
-
