@@ -8,8 +8,8 @@ RUN set -eux; \
     # 检查版本号是否有效
     [ -n "$ALPINE_VERSION" ] || { echo "Error: Failed to get Alpine version"; exit 1; }; \
     # 配置阿里云镜像源
-    echo "https://mirrors.aliyun.com/alpine/v$ALPINE_VERSION/main" > /etc/apk/repositories; \
-    echo "https://mirrors.aliyun.com/alpine/v$ALPINE_VERSION/community" >> /etc/apk/repositories; \
+   # echo "https://mirrors.aliyun.com/alpine/v$ALPINE_VERSION/main" > /etc/apk/repositories; \
+   # echo "https://mirrors.aliyun.com/alpine/v$ALPINE_VERSION/community" >> /etc/apk/repositories; \
     # 更新索引
     apk update; \
     # 安装时区工具
@@ -28,7 +28,7 @@ COPY docker/startup.sh /startup.sh
 
 RUN chmod +x /startup.sh
 
-RUN wget https://github.com/LLOneBot/LLOneBot/releases/download/v$LLONEBOT_VERSION/LLOneBot.zip -O /app/llonebot.zip
+RUN wget https://github.com/LLOneBot/LLOneBot/releases/download/v6.3.4/LLOneBot.zip -O /app/llonebot.zip
 
 #COPY /dist/llonebot.zip /app/llonebot.zip
 
