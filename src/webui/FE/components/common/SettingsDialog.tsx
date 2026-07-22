@@ -1,6 +1,7 @@
 import React from 'react'
 import { X, Sun, Moon, Monitor, Eye, EyeOff, LogOut, Power } from 'lucide-react'
 import { apiFetch } from '../../utils/api'
+import { showToast } from './Toast'
 import { useThemeStore } from '../../stores/themeStore'
 import { useSettingsStore } from '../../stores/settingsStore'
 
@@ -17,6 +18,15 @@ const SettingsDialog: React.FC<SettingsDialogProps> = ({ visible, onClose, onLog
   const [showQQLogoutConfirm, setShowQQLogoutConfirm] = React.useState(false)
 
   const handleQQLogout = async () => {
+    // PMHQ 模式下 QQ 由外部客户端托管, LLBot 无法退出登录 -- 拦下并提示, 不刷新
+    try {
+      const info = await apiFetch<{ mode?: string }>('/api/login-info')
+      if (info.success && info.data?.mode === 'pmhq') {
+        setShowQQLogoutConfirm(false)
+        showToast('PMHQ 模式暂不支持退出 QQ', 'warning')
+        return
+      }
+    } catch { /* 查不到模式就按原逻辑继续退出 */ }
     try { await apiFetch('/api/logout', { method: 'POST' }) } catch { /* 忽略, 直接刷新回登录页 */ }
     window.location.reload()
   }

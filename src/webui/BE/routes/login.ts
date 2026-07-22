@@ -1,5 +1,6 @@
 import { Context } from 'cordis'
 import { selfInfo, DATA_DIR } from '@/common/globalVars'
+import { isPmhqMode } from '@/common/utils/environment'
 import { Hono } from 'hono'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
@@ -55,7 +56,11 @@ export function createLoginRoutes(ctx: Context): Hono {
   })
 
   // 退出当前 QQ 登录, 回未登录 (need_qrcode); FE 轮询 login-info 的 online 转 false 后回登录页.
+  // PMHQ 模式下 QQ 由外部 QQ NT 客户端托管, LLBot 无权退出登录 (logout 是 base no-op), 明确回绝。
   router.post('/logout', async (c) => {
+    if (isPmhqMode()) {
+      return c.json({ success: false, message: 'PMHQ 模式暂不支持退出 QQ' }, 400)
+    }
     try {
       await ctx.qqProtocol.logout()
       return c.json({ success: true })
@@ -88,7 +93,7 @@ export function createLoginRoutes(ctx: Context): Hono {
         // 读不出就不带 webui, FE 回退到默认跳主页逻辑
       }
     }
-    return c.json({ success: true, data: { ...selfInfo, webui } })
+    return c.json({ success: true, data: { ...selfInfo, mode: isPmhqMode() ? 'pmhq' : 'direct', webui } })
   })
 
   return router
