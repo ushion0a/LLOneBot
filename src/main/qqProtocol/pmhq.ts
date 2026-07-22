@@ -140,9 +140,14 @@ export class PmhqQQProtocol extends QQProtocolBase {
           selfInfo.online = true
           this.maybeEmitOnline()
           this.scheduleFetchSelfNick(() => this.pmhqProbeToken === myToken)
-        } else if (!warnedNotLoggedIn) {
-          this.logger.info('QQ 未登录，等待登录中...')
-          warnedNotLoggedIn = true
+        } else {
+          // QQ 未登录: 此时才启动终端扫码 loop (幂等). 已登录则永不进拉码路径,
+          // 避免对已登录的 QQ 拉码 -> get_login_qrcode 返回已登录 -> QR code unavailable 刷屏。
+          this.ensureQrLoop()
+          if (!warnedNotLoggedIn) {
+            this.logger.info('QQ 未登录，等待登录中...')
+            warnedNotLoggedIn = true
+          }
         }
       } catch (e) {
         if (this.pmhqProbeToken !== myToken) return
@@ -156,8 +161,6 @@ export class PmhqQQProtocol extends QQProtocolBase {
       setTimeout(probe, 600)
     }
     probe()
-    // 未登录时启动 base 通用终端扫码 loop; online (probe 探测到) 时靠 selfInfo.online guard 自动停
-    this.ensureQrLoop()
   }
 
   /**
