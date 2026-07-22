@@ -130,6 +130,8 @@ export class DirectQQProtocol extends QQProtocolBase {
     selfInfo.nick = ''
     this.onlineEmitted = false
     this.runtimeUinOverride = null
+    // 清 QR 展示缓存: 否则若刚登录又登出 (TTL 180s 内), 会复用上一次的旧码
+    this.resetQrState()
     setLoginState({ state: 'need_qrcode' })
     this.ensureQrLoop()
   }
@@ -141,6 +143,10 @@ export class DirectQQProtocol extends QQProtocolBase {
    */
   protected async fetchFreshQrCode(): Promise<{ qrcodeUrl: string; pngBase64: string; expireTimeSec: number; sig: string } | null> {
     if (!this.directClient) return null
+    // 拉码走底层 socket. 主动 logout 后 socket 已 destroy 但不自动重连 (manualLogout gate),
+    // 这里断连自愈: 只重建 TCP 拉新码, 不恢复 session, 不违背"logout 不重登旧号"的设计.
+    // 同 doInitDirectClient 的防御 (direct.ts connect 前置检查)。
+    if (!this.directClient.isConnected) await this.directClient.connect()
     const qr = await fetchQrCode(this.directClient)
     this.directQrResult = qr
     return {
