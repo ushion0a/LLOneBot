@@ -61,7 +61,8 @@ export class NTMsgApi extends Service {
     return new Promise((resolve, reject) => {
       const dispose = this.ctx.on('nt/message-sent', (data) => {
         const msg = data.message
-        if (msg.peerUid !== peer.peerUid) return
+        // 用 String() 比 peerUid: 调用方(如 WebQQ 转发)可能传 number 群号, 回声里是 string, 严格 === 会漏配
+        if (String(msg.peerUid) !== String(peer.peerUid)) return
         if (+msg.msgRandom !== random) return
         clearTimeout(timer)
         dispose()
@@ -190,9 +191,10 @@ export class NTMsgApi extends Service {
     }
   }
 
+  /** 一次最多拉取 30 条消息 */
   async getMsgsBySeqAndCount(peer: Peer, msgSeq: number, cnt: number, queryOrder: boolean) {
-    const startSeq = queryOrder ? msgSeq : Math.max(1, msgSeq - cnt + 1)
-    const endSeq = queryOrder ? msgSeq + cnt - 1 : msgSeq
+    const startSeq = queryOrder ? Math.max(1, msgSeq - cnt + 1) : msgSeq
+    const endSeq = queryOrder ? msgSeq : msgSeq + cnt - 1
     let retcode, errorMsg, messages
     if (peer.chatType === ChatType.Group) {
       const res = await this.ctx.qqProtocol.getGroupMessages(+peer.peerUid, startSeq, endSeq)
@@ -218,7 +220,7 @@ export class NTMsgApi extends Service {
       peer.peerUid,
       msgTime,
       cnt,
-      queryOrder ? 2 : 1
+      queryOrder ? 1 : 2
     )
     return {
       msgList: filterNullable(res.messages.map(e => convertToRawMessage(Msg.Message.decode(e)))),

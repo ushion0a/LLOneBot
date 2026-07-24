@@ -14,12 +14,17 @@ export const ImagePreviewContext = React.createContext<{
 
 // 视频预览上下文
 export const VideoPreviewContext = React.createContext<{
-  showPreview: (chatType: number, peerUid: string, msgId: string, elementId: string) => void
+  showPreview: (fileUuid: string, isGroup: boolean) => void
 } | null>(null)
 
 // 图片右键菜单上下文（用于添加到表情）
 export const ImageContextMenuContext = React.createContext<{
   showMenu: (e: React.MouseEvent, message: RawMessage, elementId: string) => void
+} | null>(null)
+
+// 文件卡片点击上下文：点击聊天里的文件卡片 → 打开群文件面板定位高亮
+export const FileCardContext = React.createContext<{
+  open: (t: { fileId: string; folderId: string }) => void
 } | null>(null)
 
 // QQ 图片直连：按 appid 把全局 rkey 拼在 originImageUrl 后面（跟 BE image-proxy 的注入逻辑一致），
@@ -135,7 +140,12 @@ export const MessageElementRenderer = memo<{ element: MessageElement; message?: 
       />
     )
   }
-  if (element.fileElement) return <FileElementCard fileName={element.fileElement.fileName} fileSize={element.fileElement.fileSize} />
+  if (element.fileElement) {
+    const f = element.fileElement
+    // 仅群聊文件卡片可点击定位 (私聊无群文件面板)
+    const groupFile = message?.chatType === 2 ? { fileId: f.fileUuid, folderId: f.folderId } : undefined
+    return <FileElementCard fileName={f.fileName} fileSize={f.fileSize} groupFile={groupFile} />
+  }
   if (element.pttElement) {
     return <PttElementRenderer element={element} message={message} />
   }
@@ -175,8 +185,8 @@ export const MessageElementRenderer = memo<{ element: MessageElement; message?: 
     const durationStr = `${minutes}:${seconds.toString().padStart(2, '0')}`
 
     const handleClick = () => {
-      if (message && element.elementId) {
-        videoPreviewContext?.showPreview(message.chatType, message.peerUid, message.msgId, element.elementId)
+      if (video.fileUuid) {
+        videoPreviewContext?.showPreview(video.fileUuid, message?.chatType === 2)
       }
     }
 
@@ -276,10 +286,16 @@ export const MessageElementRenderer = memo<{ element: MessageElement; message?: 
 
 // 文件卡片. 跟图片/视频一样作为独立元素渲染, 不含状态文字 ("已发送"等),
 // 状态由外层 MessageBubble 决定要不要展示.
-const FileElementCard = memo<{ fileName: string; fileSize: number }>(({ fileName, fileSize }) => {
+const FileElementCard = memo<{ fileName: string; fileSize: number; groupFile?: { fileId: string; folderId: string } }>(({ fileName, fileSize, groupFile }) => {
   const sizeText = formatFileSize(fileSize)
+  const fileCardContext = React.useContext(FileCardContext)
+  const clickable = !!groupFile && !!fileCardContext
   return (
-    <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/5 dark:bg-white/5 border border-white/10 min-w-[220px] max-w-[280px]">
+    <div
+      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-white/5 dark:bg-white/5 border border-white/10 min-w-[220px] max-w-[280px]${clickable ? ' cursor-pointer hover:bg-white/10 transition-colors' : ''}`}
+      onClick={clickable ? () => fileCardContext!.open(groupFile!) : undefined}
+      title={clickable ? '在群文件中查看' : undefined}
+    >
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium leading-snug line-clamp-2 break-all">{fileName}</div>
         {sizeText && <div className="text-xs opacity-60 mt-1">{sizeText}</div>}

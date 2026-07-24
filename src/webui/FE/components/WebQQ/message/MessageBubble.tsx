@@ -10,6 +10,18 @@ export const MessageContextMenuContext = React.createContext<{
   showMenu: (e: React.MouseEvent, message: RawMessage) => void
 } | null>(null)
 
+// 多选转发上下文: enabled 时气泡显示勾选框, 整条点击切换选中
+export const MultiSelectContext = React.createContext<{
+  enabled: boolean
+  isSelected: (msgId: string) => boolean
+  toggle: (msgId: string) => void
+} | null>(null)
+
+// 自己贴/取消表情后的乐观更新: EmojiReactionList 点击跟贴/取消时通知 ChatWindow 立即更新本地 (不等 SSE)
+export const SelfReactionContext = React.createContext<{
+  onSelfReact: (msgSeq: string | number, emojiId: string, isAdd: boolean, groupCode: string) => void
+} | null>(null)
+
 // 头像右键菜单信息
 export interface AvatarContextMenuInfo {
   x: number
@@ -167,6 +179,7 @@ export const RawMessageBubble = memo<{ message: RawMessage; allMessages: RawMess
   const scrollToMessageContext = React.useContext(ScrollToMessageContext)
   const groupMembersContext = React.useContext(GroupMembersContext)
   const friendsContext = React.useContext(FriendsContext)
+  const multiSelect = React.useContext(MultiSelectContext)
 
   // 获取发送者名称
   let senderName = message.sendMemberName || message.sendNickName || message.senderUin
@@ -244,6 +257,7 @@ export const RawMessageBubble = memo<{ message: RawMessage; allMessages: RawMess
   const replySourceMsg = replyElement ? allMessages.find(m => m.msgId === replyElement.replayMsgId || m.msgSeq === replyElement.replayMsgSeq) : null
 
   const handleBubbleContextMenu = (e: React.MouseEvent) => {
+    if (multiSelect?.enabled) return // 多选模式下不弹右键菜单
     e.preventDefault()
     e.stopPropagation()
     contextMenuContext?.showMenu(e, message)
@@ -283,7 +297,7 @@ export const RawMessageBubble = memo<{ message: RawMessage; allMessages: RawMess
     }
   }
 
-  return (
+  const bubble = (
     <div className={`flex gap-2 w-full ${isSelf ? 'flex-row-reverse' : ''} ${isHighlighted ? 'animate-pulse bg-pink-100 dark:bg-pink-900/30 rounded-lg -mx-2 px-2' : ''}`}>
       <img
         src={senderAvatar}
@@ -366,6 +380,25 @@ export const RawMessageBubble = memo<{ message: RawMessage; allMessages: RawMess
       </div>
     </div>
   )
+
+  if (!multiSelect?.enabled) return bubble
+
+  // 多选模式: 整行加勾选框, 点击整行切换选中 (气泡本身 pointer-events-none 不响应内部点击)
+  const selected = multiSelect.isSelected(message.msgId)
+  return (
+    <div
+      onClick={() => multiSelect.toggle(message.msgId)}
+      className={`flex items-center gap-2 cursor-pointer rounded-lg -mx-2 px-2 py-1 transition-colors ${selected ? 'bg-pink-100/60 dark:bg-pink-900/30' : 'hover:bg-theme-item-hover'}`}
+    >
+      <input
+        type="checkbox"
+        checked={selected}
+        readOnly
+        className="w-4 h-4 flex-shrink-0 accent-pink-500 pointer-events-none"
+      />
+      <div className="flex-1 min-w-0 pointer-events-none">{bubble}</div>
+    </div>
+  )
 })
 
 // 获取表情图片路径
@@ -383,6 +416,7 @@ function getEmojiImagePath(emojiId: string, emojiType: string): string {
 // 表情回应列表组件
 const EmojiReactionList = memo<{ message: RawMessage; isSelf: boolean }>(({ message, isSelf }) => {
   const [loading, setLoading] = useState<string | null>(null)
+  const selfReaction = React.useContext(SelfReactionContext)
 
   if (!message.emojiLikesList || message.emojiLikesList.length === 0) return null
 
@@ -392,6 +426,8 @@ const EmojiReactionList = memo<{ message: RawMessage; isSelf: boolean }>(({ mess
     try {
       // isClicked 为 true 表示自己已贴过，点击取消；否则点击添加
       await setEmojiLike(message.chatType, message.peerUin, message.msgSeq, emojiId, !isClicked)
+      // 乐观更新本地 (server 未必推 self reaction, 不然要刷新才生效)
+      selfReaction?.onSelfReact(message.msgSeq, emojiId, !isClicked, String(message.peerUin))
     } catch (e) {
       showToast(e.message || '操作失败', 'error')
     } finally {

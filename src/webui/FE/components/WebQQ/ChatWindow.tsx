@@ -1,22 +1,23 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Users, Loader2, ArrowLeft, ArrowDown } from 'lucide-react'
+import { Users, Loader2, ArrowLeft, ArrowDown, FolderOpen, Forward, X } from 'lucide-react'
 import type { ChatSession, RawMessage } from '../../types/webqq'
-import { getMessages, getSelfUid, getSelfUin, getUserProfile, UserProfile, kickGroupMember, getGroupProfile, GroupProfile, quitGroup, muteGroupMember, setMemberTitle } from '../../utils/webqqApi'
+import { getMessages, getSelfUid, getSelfUin, getUserProfile, UserProfile, kickGroupMember, getGroupProfile, GroupProfile, quitGroup, muteGroupMember, setMemberTitle, forwardSingleMessage, forwardMultiMessages } from '../../utils/webqqApi'
 import { useWebQQStore, hasVisitedChat, markChatVisited } from '../../stores/webqqStore'
-import { getCachedMessages, setCachedMessages, appendCachedMessage, removeCachedMessage } from '../../utils/messageDb'
+import { getCachedMessages, setCachedMessages, appendCachedMessage, removeCachedMessage, updateCachedMessageEmojiReaction } from '../../utils/messageDb'
 import { showToast } from '../common'
 
 import { UserProfileCard } from './profile/UserProfileCard'
 import { GroupProfileCard } from './profile/GroupProfileCard'
 import { ImagePreviewModal, VideoPreviewModal } from './common/PreviewModals'
-import { ImagePreviewContext, VideoPreviewContext, ImageContextMenuContext } from './message/MessageElements'
-import { RawMessageBubble, TempMessageBubble, MessageContextMenuContext, AvatarContextMenuContext, ScrollToMessageContext, GroupMembersContext, FriendsContext } from './message/MessageBubble'
+import { ImagePreviewContext, VideoPreviewContext, ImageContextMenuContext, FileCardContext } from './message/MessageElements'
+import { RawMessageBubble, TempMessageBubble, MessageContextMenuContext, AvatarContextMenuContext, ScrollToMessageContext, GroupMembersContext, FriendsContext, MultiSelectContext, SelfReactionContext } from './message/MessageBubble'
 import type { TempMessage, AvatarContextMenuInfo, FriendInfo } from './message/MessageBubble'
 import { MuteDialog, KickConfirmDialog, TitleDialog } from './chat/ChatDialogs'
 import { MessageContextMenu, AvatarContextMenu } from './chat/ContextMenus'
 import { ChatInput } from './chat/ChatInput'
+import ForwardTargetPicker, { type ForwardTarget } from './chat/ForwardTargetPicker'
 import { EmojiReactionPicker } from './message/EmojiReactionPicker'
 
 interface EmojiReactionData {
@@ -90,6 +91,7 @@ const EmojiReactionTip: React.FC<{ tip: SystemTip; onScrollToMessage: (msgSeq: s
 interface ChatWindowProps {
   session: ChatSession | null
   onShowMembers?: () => void
+  onShowFiles?: (target?: { folderId: string; fileId: string }) => void
   onNewMessageCallback?: (callback: ((msg: RawMessage) => void) | null) => void
   onEmojiReactionCallback?: (callback: ((data: EmojiReactionData) => void) | null) => void
   onMessageRecalledCallback?: (callback: ((data: { msgId: string; msgSeq: string }) => void) | null) => void
@@ -101,7 +103,7 @@ interface ChatWindowProps {
 
 type MessageItem = { type: 'raw'; data: RawMessage } | { type: 'temp'; data: TempMessage } | { type: 'system'; data: SystemTip }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMessageCallback, onEmojiReactionCallback, onMessageRecalledCallback, appendInputMention, onAppendInputMentionConsumed, onBack, showBackButton }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onShowFiles, onNewMessageCallback, onEmojiReactionCallback, onMessageRecalledCallback, appendInputMention, onAppendInputMentionConsumed, onBack, showBackButton }) => {
   const [messages, setMessages] = useState<RawMessage[]>([])
   const [tempMessages, setTempMessages] = useState<TempMessage[]>([])
   const [systemTips, setSystemTips] = useState<SystemTip[]>([])
@@ -109,7 +111,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
   const [loadingMore, setLoadingMore] = useState(false)
   const [hasMore, setHasMore] = useState(true)
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null)
-  const [previewVideoUrl, setPreviewVideoUrl] = useState<{ chatType: number; peerUid: string; msgId: string; elementId: string } | null>(null)
+  const [previewVideoUrl, setPreviewVideoUrl] = useState<{ fileUuid: string; isGroup: boolean } | null>(null)
   const [replyTo, setReplyTo] = useState<RawMessage | null>(null)
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; message: RawMessage; elementId?: string } | null>(null)
   const [avatarContextMenu, setAvatarContextMenu] = useState<AvatarContextMenuInfo | null>(null)
@@ -122,21 +124,95 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
   const [titleDialog, setTitleDialog] = useState<{ uid: string; name: string; groupCode: string } | null>(null)
   const [emojiPickerTarget, setEmojiPickerTarget] = useState<{ message: RawMessage; x: number; y: number } | null>(null)
   const [showScrollToBottom, setShowScrollToBottom] = useState(false)
+  // 转发: 多选模式 + 已选消息 + 会话选择器状态
+  const [multiSelectMode, setMultiSelectMode] = useState(false)
+  const [selectedMsgIds, setSelectedMsgIds] = useState<Set<string>>(new Set())
+  // 会话选择器: single=true 单条 re-send; single=false 多选合并转发. msgSeqs 为待转发消息的 msgSeq.
+  const [forwardPicker, setForwardPicker] = useState<{ single: boolean; msgSeqs: number[] } | null>(null)
+  const [forwarding, setForwarding] = useState(false)
+  // 转发成功后的跳转确认框: 存目标会话, 点确认切过去
+  const [jumpConfirm, setJumpConfirm] = useState<ForwardTarget | null>(null)
 
   const imagePreviewContextValue = useMemo(() => ({
     showPreview: (url: string) => setPreviewImageUrl(url)
   }), [])
 
   const videoPreviewContextValue = useMemo(() => ({
-    showPreview: (chatType: number, peerUid: string, msgId: string, elementId: string) =>
-      setPreviewVideoUrl({ chatType, peerUid, msgId, elementId })
+    showPreview: (fileUuid: string, isGroup: boolean) =>
+      setPreviewVideoUrl({ fileUuid, isGroup })
   }), [])
+
+  const fileCardContextValue = useMemo(() => ({
+    open: (t: { fileId: string; folderId: string }) => onShowFiles?.(t)
+  }), [onShowFiles])
 
   const messageContextMenuValue = useMemo(() => ({
     showMenu: (e: React.MouseEvent, message: RawMessage) => {
       setContextMenu({ x: e.clientX, y: e.clientY, message })
     }
   }), [])
+
+  const toggleSelectMsg = useCallback((msgId: string) => {
+    setSelectedMsgIds(prev => {
+      const next = new Set(prev)
+      if (next.has(msgId)) next.delete(msgId); else next.add(msgId)
+      return next
+    })
+  }, [])
+
+  const multiSelectContextValue = useMemo(() => ({
+    enabled: multiSelectMode,
+    isSelected: (msgId: string) => selectedMsgIds.has(msgId),
+    toggle: toggleSelectMsg,
+  }), [multiSelectMode, selectedMsgIds, toggleSelectMsg])
+
+  const exitMultiSelect = useCallback(() => {
+    setMultiSelectMode(false)
+    setSelectedMsgIds(new Set())
+  }, [])
+
+  // 选中的 msgId 换成 msgSeq (转发后端按 msgSeq 反查源消息)
+  const selectedMsgSeqs = useCallback((): number[] => {
+    return messages
+      .filter(m => selectedMsgIds.has(m.msgId))
+      .map(m => Number(m.msgSeq))
+      .filter(n => Number.isFinite(n))
+  }, [messages, selectedMsgIds])
+
+  // 会话选择器选定目标后执行转发
+  const handleForwardTo = useCallback(async (target: ForwardTarget) => {
+    if (!forwardPicker || !session) return
+    setForwarding(true)
+    try {
+      const src = { chatType: Number(session.chatType), peerId: session.peerId }
+      const dst = { chatType: target.chatType, peerId: target.peerId }
+      if (forwardPicker.single) {
+        await forwardSingleMessage(src, forwardPicker.msgSeqs[0], dst)
+      } else {
+        await forwardMultiMessages(src, forwardPicker.msgSeqs, dst)
+      }
+      setForwardPicker(null)
+      exitMultiSelect()
+      // 转发到的是目标会话(通常非当前会话), 弹确认框问是否跳过去
+      setJumpConfirm(target)
+    } catch (e) {
+      showToast((e as Error).message || '转发失败', 'error')
+    } finally {
+      setForwarding(false)
+    }
+  }, [forwardPicker, session, exitMultiSelect])
+
+  // 确认框点"跳转": 切到目标会话
+  const handleJumpToTarget = useCallback(() => {
+    if (!jumpConfirm) return
+    useWebQQStore.getState().setCurrentChat({
+      chatType: jumpConfirm.chatType as 1 | 2 | 100,
+      peerId: jumpConfirm.peerId,
+      peerName: jumpConfirm.name,
+      peerAvatar: jumpConfirm.avatar,
+    })
+    setJumpConfirm(null)
+  }, [jumpConfirm])
 
   const imageContextMenuValue = useMemo(() => ({
     showMenu: (e: React.MouseEvent, message: RawMessage, elementId: string) => {
@@ -157,6 +233,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
   const chatInputRef = useRef<any>(null)
   const sessionRef = useRef(session)
   const shouldScrollRef = useRef(true)
+  // 镜像 isScrollReady 给 IntersectionObserver 闭包读: 初始滚到底完成前, 不允许"滚到顶触发加载更多"
+  // (刷新后滚动条初始在顶部, 会误触发 loadMessages 拉历史, 一直循环)
+  const isScrollReadyRef = useRef(false)
   const prevSessionKeyRef = useRef<string | null>(null)
   const allItemsRef = useRef<MessageItem[]>([])
   const messageCacheRef = useRef<Map<string, RawMessage[]>>(new Map())
@@ -253,7 +332,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
   }, [virtualizer])
 
   const [needScrollToBottom, setNeedScrollToBottom] = useState(false)
-  const scrollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const bottomLockUntilRef = useRef(0)
   const bottomLockRafRef = useRef<number | null>(null)
 
@@ -284,25 +362,54 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
     const currentKey = session ? `${session.chatType}_${session.peerId}` : null
     if (currentKey !== prevSessionKeyRef.current) {
       prevSessionKeyRef.current = currentKey
+      isScrollReadyRef.current = false
       setIsScrollReady(false)
       setNeedScrollToBottom(true)
     }
   }, [session?.chatType, session?.peerId])
 
+  // 切换会话时退出多选/关闭转发选择器, 避免状态残留到新会话
   useEffect(() => {
-    if (allItems.length === 0 || !needScrollToBottom) return
-    if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current)
-    scrollTimerRef.current = setTimeout(() => {
-      setNeedScrollToBottom(false)
-      const scrollToEnd = () => virtualizer.scrollToIndex(allItems.length - 1, { align: 'end' })
-      requestAnimationFrame(() => {
-        scrollToEnd()
-        setTimeout(scrollToEnd, 50)
-        setTimeout(() => { scrollToEnd(); setIsScrollReady(true) }, 100)
-      })
-    }, 200)
-    return () => { if (scrollTimerRef.current) clearTimeout(scrollTimerRef.current) }
-  }, [allItems.length, needScrollToBottom, virtualizer])
+    setMultiSelectMode(false)
+    setSelectedMsgIds(new Set())
+    setForwardPicker(null)
+    setJumpConfirm(null)
+  }, [session?.chatType, session?.peerId])
+
+  // 初始滚到底: loading 结束后用 rAF 循环把列表锁到底, 直到"连续几帧确实到底"或超时兜底才放开 (置 isScrollReady,
+  // 该 flag 同时 gate 了"滚到顶加载更多"). 修复"刷新后停在最老消息、持续触发拉历史"死循环:
+  // - 必须等 loading=false: loading 期间列表区渲染 spinner 而非虚拟列表, 容器 scrollHeight=0.
+  // - 必须等 rendered (sh>0): 早期几帧 sh=ch=0 会把 "0-0-0<4" 误判成已到底而提前收尾, 消息还没渲染滚动就结束.
+  // - 不依赖 allItems.length (消息流式到达时反复变会打断脆弱定时器); scrollToBottom 含 scrollTop=scrollHeight 兜底.
+  useEffect(() => {
+    if (!needScrollToBottom || loading) return
+    let raf = 0
+    let stableFrames = 0
+    const started = Date.now()
+    const MAX_MS = 5000
+    const tick = () => {
+      const container = parentRef.current
+      const ready = !!container && container.scrollHeight > 0 && allItemsRef.current.length > 0
+      if (ready) {
+        scrollToBottom()
+        // 内容不足一屏 (sh<=ch) 时顶即底; 否则要求真正滚到底
+        const atBottom = container!.scrollHeight <= container!.clientHeight
+          || container!.scrollHeight - container!.scrollTop - container!.clientHeight < 4
+        stableFrames = atBottom ? stableFrames + 1 : 0
+      } else {
+        stableFrames = 0
+      }
+      if ((ready && stableFrames >= 5) || Date.now() - started > MAX_MS) {
+        setNeedScrollToBottom(false)
+        isScrollReadyRef.current = true
+        setIsScrollReady(true)
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [needScrollToBottom, loading, scrollToBottom])
 
   useEffect(() => {
     return () => stopBottomLock()
@@ -349,70 +456,81 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
     return () => { if (onNewMessageCallback) onNewMessageCallback(null) }
   }, [onNewMessageCallback])
 
+  // 应用一次表情回应到本地 messages (SSE 事件 + 自己贴表情的乐观更新共用).
+  const applyEmojiReaction = useCallback((data: EmojiReactionData) => {
+    const selfUin = getSelfUin()
+    const isSelf = !!selfUin && data.userId === selfUin
+
+    setMessages(prev => prev.map(m => {
+      if (String(m.msgSeq) !== String(data.msgSeq)) return m
+      const existingList = m.emojiLikesList || []
+
+      if (data.isAdd) {
+        const existingIndex = existingList.findIndex(e => e.emojiId === data.emojiId)
+        if (existingIndex >= 0) {
+          const newList = [...existingList]
+          newList[existingIndex] = {
+            ...newList[existingIndex],
+            likesCnt: String(parseInt(newList[existingIndex].likesCnt) + 1),
+            isClicked: newList[existingIndex].isClicked || isSelf
+          }
+          return { ...m, emojiLikesList: newList }
+        } else {
+          return {
+            ...m,
+            emojiLikesList: [...existingList, { emojiId: data.emojiId, emojiType: parseInt(data.emojiId) > 999 ? '2' : '1', likesCnt: '1', isClicked: isSelf }]
+          }
+        }
+      } else {
+        const existingIndex = existingList.findIndex(e => e.emojiId === data.emojiId)
+        if (existingIndex >= 0) {
+          const newList = [...existingList]
+          const newCount = parseInt(newList[existingIndex].likesCnt) - 1
+          if (newCount <= 0) {
+            newList.splice(existingIndex, 1)
+          } else {
+            newList[existingIndex] = {
+              ...newList[existingIndex],
+              likesCnt: String(newCount),
+              isClicked: isSelf ? false : newList[existingIndex].isClicked
+            }
+          }
+          return { ...m, emojiLikesList: newList }
+        }
+      }
+      return m
+    }))
+
+    // 系统提示只在别人添加表情时显示 (自己贴的不提示)
+    if (data.isAdd && !isSelf) {
+      const tip: SystemTip = {
+        id: `tip_${Date.now()}_${Math.random()}`,
+        type: 'emoji-reaction',
+        userName: data.userName,
+        emojiId: data.emojiId,
+        msgSeq: data.msgSeq,
+        timestamp: Date.now()
+      }
+      setSystemTips(prev => [...prev, tip])
+    }
+  }, [])
+
+  // 自己贴/取消表情后的乐观更新: 不等 SSE (server 未必推 self reaction), 立即更新本地 + 缓存
+  const applySelfReaction = useCallback((msgSeq: string | number, emojiId: string, isAdd: boolean, groupCode: string) => {
+    const selfUin = getSelfUin() || ''
+    applyEmojiReaction({ groupCode, msgSeq: String(msgSeq), emojiId, userId: selfUin, userName: '', isAdd })
+    updateCachedMessageEmojiReaction(2, groupCode, String(msgSeq), emojiId, isAdd, true)
+  }, [applyEmojiReaction])
+
+  const selfReactionContextValue = useMemo(() => ({
+    onSelfReact: applySelfReaction
+  }), [applySelfReaction])
+
   // 处理表情回应事件
   useEffect(() => {
     if (onEmojiReactionCallback) {
       const handleEmojiReaction = (data: EmojiReactionData) => {
-        const selfUin = getSelfUin()
-        const isSelf = selfUin && data.userId === selfUin
-
-        // 更新消息的表情列表
-        setMessages(prev => prev.map(m => {
-          if (m.msgSeq !== data.msgSeq) return m
-          const existingList = m.emojiLikesList || []
-
-          if (data.isAdd) {
-            // 添加表情
-            const existingIndex = existingList.findIndex(e => e.emojiId === data.emojiId)
-            if (existingIndex >= 0) {
-              const newList = [...existingList]
-              newList[existingIndex] = {
-                ...newList[existingIndex],
-                likesCnt: String(parseInt(newList[existingIndex].likesCnt) + 1),
-                // 如果是自己贴的，标记为已点击
-                isClicked: newList[existingIndex].isClicked || isSelf
-              }
-              return { ...m, emojiLikesList: newList }
-            } else {
-              return {
-                ...m,
-                emojiLikesList: [...existingList, { emojiId: data.emojiId, emojiType: parseInt(data.emojiId) > 999 ? '2' : '1', likesCnt: '1', isClicked: isSelf }]
-              }
-            }
-          } else {
-            // 移除表情
-            const existingIndex = existingList.findIndex(e => e.emojiId === data.emojiId)
-            if (existingIndex >= 0) {
-              const newList = [...existingList]
-              const newCount = parseInt(newList[existingIndex].likesCnt) - 1
-              if (newCount <= 0) {
-                newList.splice(existingIndex, 1)
-              } else {
-                newList[existingIndex] = {
-                  ...newList[existingIndex],
-                  likesCnt: String(newCount),
-                  // 如果是自己取消的，标记为未点击
-                  isClicked: isSelf ? false : newList[existingIndex].isClicked
-                }
-              }
-              return { ...m, emojiLikesList: newList }
-            }
-          }
-          return m
-        }))
-
-        // 添加系统提示消息（只在添加表情时显示，且不是自己的回应）
-        if (data.isAdd && !isSelf) {
-          const tip: SystemTip = {
-            id: `tip_${Date.now()}_${Math.random()}`,
-            type: 'emoji-reaction',
-            userName: data.userName,
-            emojiId: data.emojiId,
-            msgSeq: data.msgSeq,
-            timestamp: Date.now()
-          }
-          setSystemTips(prev => [...prev, tip])
-        }
+        applyEmojiReaction(data)
       }
       onEmojiReactionCallback(handleEmojiReaction)
     }
@@ -625,6 +743,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
 
       // 重置加载状态
       isLoadingInitialRef.current = false
+      // 每次切会话先清掉上一会话残留的 loading: 快速连续切换时, 旧请求 finally 因 checkSession 失败
+      // 不会 setLoading(false), 若新会话又不触发 API 加载 (已 visited), loading 会永久停在 true -> 一直转圈.
+      // 在此无条件清零, 需要加载的分支下面会自己再 setLoading(true).
+      setLoading(false)
 
       // 先尝试从内存缓存读取
       const cachedInMemory = messageCacheRef.current.get(sessionKey)
@@ -703,8 +825,9 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
     const observer = new IntersectionObserver(
       (entries) => {
         const entry = entries[0]
-        // 首次加载中不触发加载更多
-        if (entry.isIntersecting && hasMore && !isLoadingMoreRef.current && !loading && messages.length > 0) {
+        // 首次滚到底完成 (isScrollReadyRef) 前不触发加载更多: 刚渲染时滚动条在顶部, sentinel 会立刻进入
+        // 视口误触发拉历史, 一直循环. 必须等初始滚到底稳定后才允许"滚到顶加载更多".
+        if (entry.isIntersecting && isScrollReadyRef.current && hasMore && !isLoadingMoreRef.current && !loading && messages.length > 0) {
           const firstMsgSeq = messages[0]?.msgSeq
           if (firstMsgSeq) {
             isLoadingMoreRef.current = true
@@ -787,12 +910,15 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
   return (
     <ImagePreviewContext.Provider value={imagePreviewContextValue}>
     <VideoPreviewContext.Provider value={videoPreviewContextValue}>
+    <FileCardContext.Provider value={fileCardContextValue}>
     <ImageContextMenuContext.Provider value={imageContextMenuValue}>
     <MessageContextMenuContext.Provider value={messageContextMenuValue}>
     <AvatarContextMenuContext.Provider value={avatarContextMenuValue}>
     <ScrollToMessageContext.Provider value={scrollToMessageContextValue}>
     <GroupMembersContext.Provider value={groupMembersContextValue}>
     <FriendsContext.Provider value={friendsContextValue}>
+    <MultiSelectContext.Provider value={multiSelectContextValue}>
+    <SelfReactionContext.Provider value={selfReactionContextValue}>
       <div ref={chatWindowRef} className="flex flex-col h-full relative">
         {/* 头部 */}
         <div className="flex items-center justify-between px-2 md:px-4 py-3 border-b border-theme-divider bg-theme-card">
@@ -870,10 +996,19 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
               </div>
             </div>
           </div>
-          {session.chatType === 2 && onShowMembers && (
-            <button onClick={onShowMembers} className="p-2 text-theme-muted hover:text-theme hover:bg-theme-item rounded-lg" title="查看群成员">
-              <Users size={20} />
-            </button>
+          {session.chatType === 2 && (
+            <div className="flex items-center flex-shrink-0">
+              {onShowFiles && (
+                <button onClick={() => onShowFiles()} className="p-2 text-theme-muted hover:text-theme hover:bg-theme-item rounded-lg" title="群文件">
+                  <FolderOpen size={20} />
+                </button>
+              )}
+              {onShowMembers && (
+                <button onClick={onShowMembers} className="p-2 text-theme-muted hover:text-theme hover:bg-theme-item rounded-lg" title="查看群成员">
+                  <Users size={20} />
+                </button>
+              )}
+            </div>
           )}
         </div>
 
@@ -917,18 +1052,43 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
           </button>
         )}
 
-        {/* 输入区域 */}
-        <ChatInput
-          ref={chatInputRef}
-          session={session}
-          replyTo={replyTo}
-          onReplyCancel={() => setReplyTo(null)}
-          onSendStart={handleSendStart}
-          onSendEnd={handleSendEnd}
-          onTempMessage={handleTempMessage}
-          onTempMessageRemove={handleTempMessageRemove}
-          onTempMessageFail={handleTempMessageFail}
-        />
+        {/* 输入区域 / 多选转发操作栏 */}
+        {multiSelectMode ? (
+          <div className="border-t border-theme-divider bg-theme-card px-4 py-3 flex items-center justify-between gap-3">
+            <span className="text-sm text-theme-secondary">已选 {selectedMsgIds.size} 条</span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={exitMultiSelect}
+                className="px-4 py-1.5 text-sm text-theme-hint hover:text-theme transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  const seqs = selectedMsgSeqs()
+                  if (seqs.length === 0) { showToast('请先选择消息', 'warning'); return }
+                  setForwardPicker({ single: false, msgSeqs: seqs })
+                }}
+                disabled={selectedMsgIds.size === 0}
+                className="px-4 py-1.5 text-sm gradient-primary text-white rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 transition-all"
+              >
+                <Forward size={15} /> 转发 ({selectedMsgIds.size})
+              </button>
+            </div>
+          </div>
+        ) : (
+          <ChatInput
+            ref={chatInputRef}
+            session={session}
+            replyTo={replyTo}
+            onReplyCancel={() => setReplyTo(null)}
+            onSendStart={handleSendStart}
+            onSendEnd={handleSendEnd}
+            onTempMessage={handleTempMessage}
+            onTempMessageRemove={handleTempMessageRemove}
+            onTempMessageFail={handleTempMessageFail}
+          />
+        )}
       </div>
 
       {/* 消息右键菜单 */}
@@ -949,6 +1109,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
               removeCachedMessage(session.chatType, session.peerId, msgId)
             }
           }}
+          onForward={(msg) => setForwardPicker({ single: true, msgSeqs: [Number(msg.msgSeq)] })}
+          onMultiSelect={(msg) => { setMultiSelectMode(true); setSelectedMsgIds(new Set([msg.msgId])) }}
         />
       )}
 
@@ -957,6 +1119,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
         <EmojiReactionPicker
           target={emojiPickerTarget}
           onClose={() => setEmojiPickerTarget(null)}
+          onReacted={(emojiId) => {
+            const m = emojiPickerTarget.message
+            applySelfReaction(m.msgSeq, emojiId, true, String(m.peerUin))
+          }}
           containerRef={chatWindowRef}
         />
       )}
@@ -1082,12 +1248,41 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ session, onShowMembers, onNewMe
 
       <ImagePreviewModal url={previewImageUrl} onClose={() => setPreviewImageUrl(null)} />
       <VideoPreviewModal videoInfo={previewVideoUrl} onClose={() => setPreviewVideoUrl(null)} />
+
+      {/* 转发目标选择器 */}
+      {forwardPicker && (
+        <ForwardTargetPicker
+          count={forwardPicker.msgSeqs.length}
+          sending={forwarding}
+          onSelect={handleForwardTo}
+          onClose={() => setForwardPicker(null)}
+        />
+      )}
+
+      {/* 转发成功后的跳转确认框 */}
+      {jumpConfirm && createPortal(
+        <>
+          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setJumpConfirm(null)} />
+          <div className="fixed z-[60] top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-neutral-800 border border-theme-divider rounded-2xl shadow-xl p-5 w-80 max-w-[90vw]">
+            <div className="font-medium text-theme mb-2">转发成功</div>
+            <div className="text-sm text-theme-secondary mb-4 break-all">是否跳转到「{jumpConfirm.name}」？</div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setJumpConfirm(null)} className="px-4 py-1.5 text-sm text-theme-hint hover:text-theme transition-colors">留在当前</button>
+              <button onClick={handleJumpToTarget} className="px-4 py-1.5 text-sm gradient-primary text-white rounded-lg transition-all">跳转过去</button>
+            </div>
+          </div>
+        </>,
+        document.body
+      )}
+    </SelfReactionContext.Provider>
+    </MultiSelectContext.Provider>
     </FriendsContext.Provider>
     </GroupMembersContext.Provider>
     </ScrollToMessageContext.Provider>
     </AvatarContextMenuContext.Provider>
     </MessageContextMenuContext.Provider>
     </ImageContextMenuContext.Provider>
+    </FileCardContext.Provider>
     </VideoPreviewContext.Provider>
     </ImagePreviewContext.Provider>
   )

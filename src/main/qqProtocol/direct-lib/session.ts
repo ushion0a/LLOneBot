@@ -1,11 +1,15 @@
-import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { readdirSync, readFileSync, writeFileSync, existsSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 import { execSync } from 'node:child_process'
 import { DATA_DIR } from '@/common/globalVars'
-import { isDockerEnvironment } from '@/common/utils/environment'
+import { isDockerEnvironment, getSpecifiedUin } from '@/common/utils/environment'
 import { loadMachineGuidSync } from './machineGuid'
 import type { SessionInfo } from './client'
+
+// getSpecifiedUin 已挪到 common/utils/environment (config service 也要用, 避免牵扯 native-sign
+// 依赖链)。此处 re-export 保持 direct-lib 对外 API 不变。
+export { getSpecifiedUin }
 
 export interface PersistedSession {
   uin: string
@@ -76,21 +80,6 @@ function decryptSensitive(b64: string): SensitiveFields {
   decipher.setAuthTag(tag)
   const plain = Buffer.concat([decipher.update(enc), decipher.final()]).toString('utf8')
   return JSON.parse(plain) as SensitiveFields
-}
-
-/**
- * 从 process.argv 里解析指定 uin. 支持 4 种写法:
- *   -q <uin> / -q=<uin> / --qq <uin> / --qq=<uin>
- * 用于多账号场景: 指定一个 uin 后会读写对应的 qq-session-<uin>.json。
- */
-export function getSpecifiedUin(argv: string[] = process.argv): string | undefined {
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]
-    if ((a === '-q' || a === '--qq') && i + 1 < argv.length) return argv[i + 1]
-    if (a.startsWith('-q=')) return a.slice('-q='.length)
-    if (a.startsWith('--qq=')) return a.slice('--qq='.length)
-  }
-  return undefined
 }
 
 /** session 文件统一按 uin 命名为 qq-session-<uin>.json。 */
@@ -194,6 +183,11 @@ export function listAvailableSessions(): Array<{ uin: string; uid: string; nick:
   }
   // 按 savedAt 倒序 (最近登过的在前)
   return out.sort((a, b) => b.savedAt - a.savedAt)
+}
+
+/** 删除 qq-session-<uin>.json. 异地登录顶号后清掉失效凭证, 强制重新扫码. */
+export function deleteSession(uin: string): void {
+  try { unlinkSync(getSessionFilePathForUin(uin)) } catch {}
 }
 
 export function persistedToSessionInfo(persisted: PersistedSession): SessionInfo {

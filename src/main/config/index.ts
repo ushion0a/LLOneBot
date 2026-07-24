@@ -7,6 +7,7 @@ import path from 'node:path'
 import fs from 'node:fs'
 import JSON5 from 'json5'
 import { mergeNewProperties } from '@/common/utils'
+import { getSpecifiedUin } from '@/common/utils/environment'
 
 declare module 'cordis' {
   interface Context {
@@ -69,7 +70,17 @@ export default class Config extends Service {
       return this.config
     }
 
-    this.configPath = selfInfo.uin ? path.join(DATA_DIR, `config_${selfInfo.uin}.json`) : undefined
+    // 登录前 selfInfo.uin 为空: 若 argv 带了 -q <uin> 且对应 config_<uin>.json 已存在, 提前用它
+    // (让 WebUI/logLevel 直接起在目标账号配置上, 免去登录后从 default 端口/token 重启的窗口)。
+    // 只读不建文件: 新账号 (文件不存在) 仍走 default, 建文件留给登录成功后的 get(false)。
+    let uin = selfInfo.uin
+    if (!uin) {
+      const argUin = getSpecifiedUin()
+      if (argUin && fs.existsSync(path.join(DATA_DIR, `config_${argUin}.json`))) {
+        uin = argUin
+      }
+    }
+    this.configPath = uin ? path.join(DATA_DIR, `config_${uin}.json`) : undefined
 
     return this.reloadConfig()
   }
@@ -345,10 +356,10 @@ export const AUTH_VALIDATE_API = 'https://api-auth.luckylillia.com/api/sign/info
 
 /**
  * 校验 auth token 是否有效.
- * 2xx=valid, 401/403=invalid (失效/无权限), 网络失败/超时/其它状态=error (无法判定).
+ * 2xx=valid, 401/403=invalid (失效/无权限).
  * 纯 HTTP 探测, 不依赖 native sign 初始化, 未登录时也能用.
  */
-export async function validateAuthToken(token: string): Promise<'valid' | 'invalid' | 'error'> {
+export async function validateAuthToken(token: string): Promise<'valid' | 'invalid' | number | Error> {
   const t = token.trim()
   if (!t) return 'invalid'
   const controller = new AbortController()
@@ -360,9 +371,9 @@ export async function validateAuthToken(token: string): Promise<'valid' | 'inval
     })
     if (res.ok) return 'valid'
     if (res.status === 401 || res.status === 403) return 'invalid'
-    return 'error'
-  } catch {
-    return 'error'
+    return res.status
+  } catch (e) {
+    return e as Error
   } finally {
     clearTimeout(timer)
   }

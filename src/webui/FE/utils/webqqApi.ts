@@ -110,7 +110,7 @@ export async function getGroups(): Promise<GroupItem[]> {
   }
   const groups = response.data || []
   return groups.map(group => ({
-    groupCode: group.groupCode,
+    groupCode: group.groupCode.toString(),
     groupName: group.groupName,
     remarkName: group.remarkName || '',
     avatar: getGroupAvatar(group.groupCode),
@@ -181,6 +181,42 @@ export async function sendMessage(request: SendMessageRequest): Promise<{ msgId:
   return response.data || { msgId: '' }
 }
 
+// 转发目标 / 源会话标识
+export interface ForwardEndpoint {
+  chatType: number
+  peerId: string
+}
+
+// 单条转发 (re-send): 把源会话某条消息重新发到目标会话
+export async function forwardSingleMessage(src: ForwardEndpoint, msgSeq: number, target: ForwardEndpoint): Promise<void> {
+  const response = await apiFetch<{ msgId: string }>('/api/webqq/messages/forward', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      srcChatType: src.chatType, srcPeerId: src.peerId, msgSeq,
+      targetChatType: target.chatType, targetPeerId: target.peerId,
+    })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '转发失败')
+  }
+}
+
+// 多选合并转发: 把源会话多条消息合并成聊天记录卡片发到目标会话
+export async function forwardMultiMessages(src: ForwardEndpoint, msgSeqs: number[], target: ForwardEndpoint): Promise<void> {
+  const response = await apiFetch<{ msgId: string }>('/api/webqq/messages/forward-multi', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      srcChatType: src.chatType, srcPeerId: src.peerId, msgSeqs,
+      targetChatType: target.chatType, targetPeerId: target.peerId,
+    })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '合并转发失败')
+  }
+}
+
 // 上传图片
 export async function uploadImage(file: File): Promise<UploadResponse> {
   const formData = new FormData()
@@ -246,11 +282,9 @@ export async function getUserInfo(uid: string): Promise<{ uid: string; uin: stri
 // 所有功能改成调 webqqApi 暴露的 typed 函数 (背后是具体的 BE endpoint)。
 
 // 获取视频播放 URL
-export async function getVideoUrl(_chatType: number, _peerUid: string, _msgId: string, _elementId: string, fileUuid?: string, isGroup?: boolean): Promise<string> {
-  // BE 端 ntFileApi.getVideoUrl(fileUuid, isGroup) — 注意旧版本 FE 传的 (peer, msgId, elementId) 是错的，
-  // 真实签名要 fileUuid。FE 调用方需要改成传 videoElement.fileUuid。
+export async function getVideoUrl(fileUuid: string, isGroup?: boolean): Promise<string> {
   if (!fileUuid) {
-    throw new Error('getVideoUrl: 需要 fileUuid (旧签名 peer/msgId/elementId 已废弃)')
+    throw new Error('getVideoUrl: 需要 fileUuid')
   }
   const params = new URLSearchParams({
     fileUuid,
@@ -537,6 +571,143 @@ export async function quitGroup(groupCode: string): Promise<void> {
   })
   if (!response.success) {
     throw new Error(response.message || '退群失败')
+  }
+}
+
+// ===== 群文件 =====
+
+export interface GroupFileItem {
+  fileId: string
+  fileName: string
+  fileSize: number
+  busId: number
+  uploadTime: number
+  deadTime: number
+  modifyTime: number
+  downloadTimes: number
+  uploaderUin: string
+  uploaderName: string
+}
+
+export interface GroupFolderItem {
+  folderId: string
+  folderName: string
+  createTime: number
+  creatorUin: string
+  creatorName: string
+  fileCount: number
+  modifyTime: number
+}
+
+export interface GroupFileList {
+  files: GroupFileItem[]
+  folders: GroupFolderItem[]
+}
+
+// 群文件列表（folderId 缺省为根目录 '/'）
+export async function getGroupFileList(groupCode: string, folderId = '/'): Promise<GroupFileList> {
+  const response = await apiFetch<GroupFileList>(
+    `/api/webqq/group-files?groupCode=${encodeURIComponent(groupCode)}&folderId=${encodeURIComponent(folderId)}`
+  )
+  if (!response.success) {
+    throw new Error(response.message || '获取群文件列表失败')
+  }
+  return response.data || { files: [], folders: [] }
+}
+
+// 群文件空间信息
+export async function getGroupFileSpace(groupCode: string): Promise<{ fileCount: number; limitCount: number; usedSpace: number; totalSpace: number }> {
+  const response = await apiFetch<{ fileCount: number; limitCount: number; usedSpace: number; totalSpace: number }>(
+    `/api/webqq/group-file-space?groupCode=${encodeURIComponent(groupCode)}`
+  )
+  if (!response.success) {
+    throw new Error(response.message || '获取群文件空间失败')
+  }
+  return response.data!
+}
+
+// 获取群文件下载链接（腾讯 CDN 直链）
+export async function getGroupFileUrl(groupCode: string, fileId: string): Promise<string> {
+  const response = await apiFetch<{ url: string }>(
+    `/api/webqq/group-file-url?groupCode=${encodeURIComponent(groupCode)}&fileId=${encodeURIComponent(fileId)}`
+  )
+  if (!response.success) {
+    throw new Error(response.message || '获取下载链接失败')
+  }
+  return response.data!.url
+}
+
+// 上传群文件：先经 /upload-file 拿 filePath，再调 group-file/upload 走 highway 上传 + feed 到群
+export async function uploadGroupFile(groupCode: string, file: File, folderId = '/'): Promise<string> {
+  const { filePath, fileName } = await uploadFile(file)
+  const response = await apiFetch<{ fileId: string }>('/api/webqq/group-file/upload', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, filePath, fileName, folderId })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '上传群文件失败')
+  }
+  return response.data!.fileId
+}
+
+// 删除群文件
+export async function deleteGroupFile(groupCode: string, fileId: string, busId: number): Promise<void> {
+  const response = await apiFetch<void>('/api/webqq/group-file/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, fileId, busId })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '删除群文件失败')
+  }
+}
+
+// 重命名群文件
+export async function renameGroupFile(groupCode: string, fileId: string, parentFolderId: string, newName: string): Promise<void> {
+  const response = await apiFetch<void>('/api/webqq/group-file/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, fileId, parentFolderId, newName })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '重命名群文件失败')
+  }
+}
+
+// 新建文件夹（根目录）
+export async function createGroupFolder(groupCode: string, folderName: string): Promise<void> {
+  const response = await apiFetch<void>('/api/webqq/group-folder/create', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, folderName })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '新建文件夹失败')
+  }
+}
+
+// 删除文件夹
+export async function deleteGroupFolder(groupCode: string, folderId: string): Promise<void> {
+  const response = await apiFetch<void>('/api/webqq/group-folder/delete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, folderId })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '删除文件夹失败')
+  }
+}
+
+// 重命名文件夹
+export async function renameGroupFolder(groupCode: string, folderId: string, newName: string): Promise<void> {
+  const response = await apiFetch<void>('/api/webqq/group-folder/rename', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ groupCode, folderId, newName })
+  })
+  if (!response.success) {
+    throw new Error(response.message || '重命名文件夹失败')
   }
 }
 

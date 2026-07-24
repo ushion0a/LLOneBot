@@ -1,6 +1,7 @@
 import { Context } from 'cordis'
 import { ChatType, ElementType, RawMessage, SendMessageElement, SendPicElement, MessageElement } from '@/ntqqapi/types'
 import { SendElement } from '@/ntqqapi/entities'
+import { rawElementsToSend } from '@/ntqqapi/helper/forwardMsg'
 import { serializeResult } from '../../../BE/utils'
 import { unlink, writeFile, mkdir } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
@@ -9,8 +10,26 @@ import { randomUUID } from 'node:crypto'
 import { TEMP_DIR } from '@/common/globalVars'
 import { Hono } from 'hono'
 
+// 群聊 sendMsg 发出后会等 self-echo 拿真实 msgSeq, 超时抛此错 —— 但消息已发出, 转发场景不算失败.
+function isSelfEchoTimeout(e: unknown): boolean {
+  return e instanceof Error && e.message.includes('waitForSelfEcho timeout')
+}
+
 export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath: string) => Promise<SendPicElement | null>): Hono {
   const router = new Hono()
+
+  // 构造 Peer: C2C/临时会话先把 uin 解成 uid; 群聊 peerUid 即 groupCode.
+  // peerId 必须 String(): 前端 JSON 里群号可能是 number, 而 waitForSelfEcho 用 === 跟回声(string)比 peerUid,
+  // 类型不一致会导致群聊转发永远等不到 self-echo 而超时.
+  const resolvePeer = async (chatType: number, peerId: string) => {
+    let peerUid = String(peerId)
+    if (chatType === ChatType.C2C || chatType === ChatType.TempC2CFromGroup) {
+      const uid = await ctx.ntUserApi.getUidByUin(+peerId)
+      if (!uid) throw new Error('无法获取用户信息')
+      peerUid = uid
+    }
+    return { chatType, peerUid, guildId: '' }
+  }
 
   // 获取消息历史 - 返回原始 RawMessage 数据
   router.get('/messages', async (c) => {
@@ -54,7 +73,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
         result = await ctx.ntMsgApi.getMsgsBySeqAndCount(peer, +beforeMsgSeq, +limit, true)
       } else {
         const latestSeq = await ctx.ntMsgApi.getLatestMsgSeq(peer)
-        result = await ctx.ntMsgApi.getMsgsBySeqAndCount(peer, latestSeq, +limit, false)
+        result = await ctx.ntMsgApi.getMsgsBySeqAndCount(peer, latestSeq, +limit, true)
       }
 
       const messages = result?.msgList || []
@@ -233,6 +252,88 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       }
 
       return c.json({ success: false, message: '发送消息失败', error: (e as Error).message }, 500)
+    }
+  })
+
+  // 单条转发 (re-send): 读源消息 elements -> 重建 -> 发到目标会话
+  router.post('/messages/forward', async (c) => {
+    let cleanup: string[] = []
+    try {
+      const { srcChatType, srcPeerId, msgSeq, targetChatType, targetPeerId } = await c.req.json() as {
+        srcChatType: number; srcPeerId: string; msgSeq: number | string
+        targetChatType: number; targetPeerId: string
+      }
+      if (srcChatType == null || !srcPeerId || msgSeq == null || targetChatType == null || !targetPeerId) {
+        return c.json({ success: false, message: '缺少必要参数' }, 400)
+      }
+      const srcPeer = await resolvePeer(Number(srcChatType), srcPeerId)
+      const targetPeer = await resolvePeer(Number(targetChatType), targetPeerId)
+      const src = await ctx.ntMsgApi.getSingleMsg(srcPeer, Number(msgSeq))
+      const msg = src.msgList?.[0]
+      if (!msg) return c.json({ success: false, message: '找不到源消息' }, 404)
+
+      const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, srcPeer.chatType === ChatType.Group)
+      cleanup = deleteAfterSentFiles
+      if (elements.length === 0) return c.json({ success: false, message: '该消息无可转发内容' }, 400)
+      const result = await ctx.ntMsgApi.sendMsg(targetPeer, elements)
+      return c.json({ success: true, data: { msgId: result.msgId } })
+    } catch (e) {
+      // 群聊 sendMsg 会等 self-echo 拿真实 msgSeq, 超时抛 waitForSelfEcho timeout —— 但此时消息已发出,
+      // 不算失败, 当成功返回 (前端不依赖返回的 msgSeq).
+      if (isSelfEchoTimeout(e)) {
+        return c.json({ success: true, data: { msgId: '' } })
+      }
+      ctx.logger.error('转发消息失败:', e)
+      return c.json({ success: false, message: '转发消息失败', error: (e as Error).message }, 500)
+    } finally {
+      for (const f of cleanup) unlink(f).catch(() => {})
+    }
+  })
+
+  // 多选合并转发: 逐条取源消息组装 node -> SendElement.forward -> 发到目标会话 (聊天记录卡片)
+  router.post('/messages/forward-multi', async (c) => {
+    const cleanup: string[] = []
+    try {
+      const { srcChatType, srcPeerId, msgSeqs, targetChatType, targetPeerId } = await c.req.json() as {
+        srcChatType: number; srcPeerId: string; msgSeqs: (number | string)[]
+        targetChatType: number; targetPeerId: string
+      }
+      if (srcChatType == null || !srcPeerId || !Array.isArray(msgSeqs) || msgSeqs.length === 0 || targetChatType == null || !targetPeerId) {
+        return c.json({ success: false, message: '缺少必要参数' }, 400)
+      }
+      const srcPeer = await resolvePeer(Number(srcChatType), srcPeerId)
+      const targetPeer = await resolvePeer(Number(targetChatType), targetPeerId)
+      const isGroup = srcPeer.chatType === ChatType.Group
+
+      const seqs = [...msgSeqs].map(Number).sort((a, b) => a - b)
+      const nodes: { senderUin: number; senderName: string; elements: SendMessageElement[]; msgTime?: number }[] = []
+      for (const seq of seqs) {
+        const res = await ctx.ntMsgApi.getSingleMsg(srcPeer, seq)
+        const msg = res.msgList?.[0]
+        if (!msg) continue
+        const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, isGroup)
+        if (elements.length === 0) continue
+        cleanup.push(...deleteAfterSentFiles)
+        nodes.push({
+          senderUin: msg.senderUin,
+          senderName: msg.sendMemberName || msg.sendNickName || String(msg.senderUin),
+          elements,
+          msgTime: msg.msgTime,
+        })
+      }
+      if (nodes.length === 0) return c.json({ success: false, message: '没有可转发的消息' }, 400)
+
+      const forwardElement = SendElement.forward(nodes)
+      const result = await ctx.ntMsgApi.sendMsg(targetPeer, [forwardElement])
+      return c.json({ success: true, data: { msgId: result.msgId } })
+    } catch (e) {
+      if (isSelfEchoTimeout(e)) {
+        return c.json({ success: true, data: { msgId: '' } })
+      }
+      ctx.logger.error('合并转发失败:', e)
+      return c.json({ success: false, message: '合并转发失败', error: (e as Error).message }, 500)
+    } finally {
+      for (const f of cleanup) unlink(f).catch(() => {})
     }
   })
 

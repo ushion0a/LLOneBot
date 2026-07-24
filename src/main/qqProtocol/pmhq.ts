@@ -9,7 +9,7 @@ import type {
   ResListener,
 } from './types'
 import { Context } from 'cordis'
-import { buildSsoInfoSync } from './direct'
+import { buildSsoInfoSync } from './direct-lib'
 import { QQProtocolBase } from './base'
 
 /**
@@ -64,8 +64,22 @@ export class PmhqQQProtocol extends QQProtocolBase {
     )
   }
 
-  public async getLoginQrCode(): Promise<{ qrcodeUrl: string; pngBase64QrcodeData: string }> {
-    throw new Error('PMHQ 模式不支持扫码登录 (QQ NT 已完成登录)')
+  /**
+   * base 拉码钩子: 拉一张新登录二维码 (QQ 未登录时 PMHQ 注入的 JS 会主动拉码写临时文件, 这里读接口).
+   * expireTimeSec 用接口返回的真实 expireTime -- base 据此做 TTL, 没过期不重拉 (修终端狂刷 bug).
+   * code:1 (已登录) / 其它 (未就绪) 返回 null, base loop 静默重试.
+   */
+  protected async fetchFreshQrCode(): Promise<{ qrcodeUrl: string; pngBase64: string; expireTimeSec: number; sig: string } | null> {
+    const res = await this.fetchPmhqQrcode()
+    if (res.code === 0 && res.data) {
+      return {
+        qrcodeUrl: res.data.qrcodeUrl,
+        pngBase64: res.data.pngBase64QrcodeData,
+        expireTimeSec: res.data.expireTime,
+        sig: res.data.qrcodeUrl,
+      }
+    }
+    return null
   }
 
   // ---- PMHQ 内部: 登录探测 + 状态复位 ----
@@ -91,6 +105,7 @@ export class PmhqQQProtocol extends QQProtocolBase {
     selfInfo.nick = ''
     this.pmhqProbeToken++
     this.onlineEmitted = false
+    this.resetQrState()
     if (wasOnline) {
       this.ctx.parallel('protocol/disconnect')
     }
@@ -125,9 +140,14 @@ export class PmhqQQProtocol extends QQProtocolBase {
           selfInfo.online = true
           this.maybeEmitOnline()
           this.scheduleFetchSelfNick(() => this.pmhqProbeToken === myToken)
-        } else if (!warnedNotLoggedIn) {
-          this.logger.info('QQ 未登录，等待登录中...')
-          warnedNotLoggedIn = true
+        } else {
+          // QQ 未登录: 此时才启动终端扫码 loop (幂等). 已登录则永不进拉码路径,
+          // 避免对已登录的 QQ 拉码 -> get_login_qrcode 返回已登录 -> QR code unavailable 刷屏。
+          this.ensureQrLoop()
+          if (!warnedNotLoggedIn) {
+            this.logger.info('QQ 未登录，等待登录中...')
+            warnedNotLoggedIn = true
+          }
         }
       } catch (e) {
         if (this.pmhqProbeToken !== myToken) return
@@ -141,6 +161,20 @@ export class PmhqQQProtocol extends QQProtocolBase {
       setTimeout(probe, 600)
     }
     probe()
+  }
+
+  /**
+   * 打一次 PMHQ /get_login_qrcode. 响应约定 (见 pmhq_get_login_qrcode 文档):
+   * code:0 拿到码; code:1 已登录; code:-1 未就绪/已过期 (稍后重试会返回新码)。
+   */
+  private async fetchPmhqQrcode(): Promise<{
+    code: number
+    message?: string
+    data?: { pngBase64QrcodeData: string; qrcodeUrl: string; expireTime: number; pollTimeInterval: number }
+  }> {
+    const resp = await fetch(`${this.httpUrl}get_login_qrcode`)
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`)
+    return await resp.json()
   }
 
   // ---- PMHQ 内部: 传输层 (WS / HTTP) ----
