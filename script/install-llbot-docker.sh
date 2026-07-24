@@ -256,8 +256,11 @@ echo "$WEBUI_TOKEN" > "llbot_config/webui_token.txt"
 echo "WebUI 密码文件已生成: llbot_config/webui_token.txt"
 
 # 创建 auth_token.txt (Bot 读 data/auth_token.txt 做 sign 鉴权)
-echo "$AUTH_TOKEN" > "llbot_config/auth_token.txt"
-echo "Auth Token 文件已生成: llbot_config/auth_token.txt"
+# PMHQ 模式的 auth token 走 pmhq 容器的 PMHQ_AUTH_TOKEN env, 不落文件
+if [ "$PROTOCOL_MODE" != "pmhq" ]; then
+    echo "$AUTH_TOKEN" > "llbot_config/auth_token.txt"
+    echo "Auth Token 文件已生成: llbot_config/auth_token.txt"
+fi
 
 # 设置配置目录权限，确保 Docker 容器可以读写
 chmod -R 777 llbot_config
@@ -384,12 +387,12 @@ services:
     image: ${docker_mirror}linyuchen/pmhq:${PMHQ_TAG}
     privileged: true
     environment:
-      - ENABLE_HEADLESS=false
       - AUTO_LOGIN_QQ=${AUTO_LOGIN_QQ}
+      - PMHQ_AUTH_TOKEN=${AUTH_TOKEN}
+    volumes:
+      - qq_volume:/root/.config/QQ
     networks:
       - app_network
-    volumes:
-      - ./llbot_config:/app/llbot/data:rw
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:13000/health"]
@@ -414,14 +417,17 @@ ${LLBOT_ENV}
     restart: unless-stopped
 ${LLBOT_HEALTHCHECK}
 
+volumes:
+  qq_volume:
+
 networks:
   app_network:
     driver: bridge
 EOF
 else
     LLBOT_ENV="      - WEBUI_PORT=${WEBUI_PORT}
-      # QQ 留空=WebUI 登录页点选账号; 填 QQ 号=重启自动恢复该号 (免扫码)
-      - QQ=${AUTO_LOGIN_QQ}"
+      # AUTO_LOGIN_QQ 留空=WebUI 登录页点选账号; 填 QQ 号=重启自动恢复该号 (免扫码)
+      - AUTO_LOGIN_QQ=${AUTO_LOGIN_QQ}"
 
     cat << EOF > docker-compose.yml
 services:
@@ -453,7 +459,9 @@ printLogin(){
         echo "  - llbot_config/config_${AUTO_LOGIN_QQ}.json"
     fi
     echo "  - llbot_config/webui_token.txt"
-    echo "  - llbot_config/auth_token.txt"
+    if [ "$PROTOCOL_MODE" != "pmhq" ]; then
+        echo "  - llbot_config/auth_token.txt"
+    fi
     echo "  - docker-compose.yml"
     echo ""
     echo "WebUI 访问地址: http://localhost:${WEBUI_PORT}"

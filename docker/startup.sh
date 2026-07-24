@@ -25,9 +25,9 @@ if [ "$PROTOCOL_MODE" = "pmhq" ]; then
   exec node --enable-source-maps ./llbot.js --pmhq-port="$PMHQ_PORT" --pmhq-host="$PMHQ_HOST"
 fi
 
-# 指定 QQ 重启后自动免扫码自动快速登录。
-# 不设 QQ 则起在 WebUI 登录页, 由用户从快速登录列表点选账号 (或扫码)
-if [ -n "$QQ" ]; then
-  exec node --enable-source-maps ./llbot.js -q "$QQ"
+# 指定 AUTO_LOGIN_QQ 重启后自动免扫码快速登录。
+# 不设 AUTO_LOGIN_QQ 则起在 WebUI 登录页, 由用户从快速登录列表点选账号 (或扫码)
+if [ -n "$AUTO_LOGIN_QQ" ]; then
+  exec node --enable-source-maps ./llbot.js -q "$AUTO_LOGIN_QQ"
 fi
 exec node --enable-source-maps ./llbot.js

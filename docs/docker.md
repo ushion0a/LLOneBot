@@ -44,15 +44,43 @@ musl 到 Bot):
 - `postbuild-rename.mjs` 特意**保留 -musl 后缀** (只折叠 gnu/msvc), 否则 linux-x64-musl 被改名成
   linux-x64 会覆盖掉 glibc 那颗。
 
+## 在 amd64 开发机上跑整套 arm compose (QEMU 模拟)
+
+想在 x86_64 本机验证 arm 部署 (不换真 ARM 机器), 靠 Docker Desktop 自带的 QEMU 模拟。
+坑在于 compose 容易变成**混架构**: `linyuchen/pmhq:*-arm` 是 arm64, 但 `linyuchen/llbot:test`
+默认构的是 amd64 (test-build-amd64.ps1 / build.bat 都是 amd64 单架构或 CI 多架构 push,
+本地 daemon 里只有 amd64 那颗)。要整套 arm 得补两样:
+
+1. **构一颗 arm64 llbot 镜像** (dist 里已有 `sign-proxy.linux-arm64-musl.node`, alpine base
+   的 loader 自动选它, 现成 `Dockerfile.test` 直接能构; 跨平台构建走 buildx container driver
+   而非默认 docker driver, 构完 `--load` 进本地 daemon):
+
+       docker buildx build --builder mybuilder -f docker/Dockerfile.test \
+         --platform linux/arm64 -t linyuchen/llbot:test-arm --load .
+
+2. **compose 每个服务显式加 `platform: linux/arm64`** —— 本机是 amd64, 不声明的话 Docker 按
+   宿主架构拉/跑, 架构不匹配会报错或行为不定。pmhq + llbot 两个服务都要加。
+
+验证跑对了架构 (应输出 `aarch64`):
+
+    docker exec <container> uname -m
+
+命门:
+- QEMU 模拟**只适合测试/验证**, 慢; 生产 arm 还是得放真 ARM 机器原生跑。
+- `--load` 出来的 `test-arm` 是纯本地镜像, 没 push registry; 换机器要重构或 `docker save/load`。
+- 首次跑 arm 镜像前确认模拟器在: `docker run --rm --platform linux/arm64 alpine uname -m`
+  应回 `aarch64` (Docker Desktop 一般自带 binfmt, 缺的话 `docker run --privileged --rm
+  tonistiigi/binfmt --install arm64`)。
+
 ## 容器连接模式: 直连 / PMHQ 有头 (install 脚本二选一)
 
 install 脚本开头让用户选**连接模式** (存 `PROTOCOL_MODE`), startup.sh 按此 env 分发:
 
 - **直连** (`PROTOCOL_MODE` 未设/非 pmhq): 纯代码复刻协议, 省内存。单 llbot 服务。
   `node llbot.js [-q <uin>]`, **启动哪个号由用户决定**, 两条路:
-  - `QQ` env 设了 → `-q <uin>` 恢复该号 (无头部署重启后免扫码自动恢复);
+  - `AUTO_LOGIN_QQ` env 设了 → `-q <uin>` 恢复该号 (无头部署重启后免扫码自动恢复);
   - 没设 → 起在 WebUI 登录页, 用户从快速登录列表点选账号 (或扫码)。
-  install 脚本生成的 compose 里始终带 `QQ=`(留空), 方便用户后填。
+  install 脚本生成的 compose 里始终带 `AUTO_LOGIN_QQ=`(留空), 方便用户后填。
   **不再** "data 里恰好一个 session 就自动用它" (2026-07 改): 那是替用户做了选择,
   跟 WebUI 快速登录列表的设计冲突。
 
@@ -62,7 +90,7 @@ install 脚本开头让用户选**连接模式** (存 `PROTOCOL_MODE`), startup.
   参数名与 `pmhq.ts getPMHQHostPort()` 对齐, 代码侧靠 `isPmhqMode()` (检 `--pmhq-port=`
   argv) 触发。compose 是 pmhq + llbot 双服务, 同 `app_network`, 共享 `./llbot_config` 卷;
   llbot `depends_on: pmhq`。llbot 靠网络 (`--pmhq-host=pmhq`) 连 pmhq, 自身不挂 QQ 目录。
-  - PMHQ 分支**固定有头** (`ENABLE_HEADLESS=false` 写死), 不保留旧脚本的无头 y/n 问句
+  - PMHQ 分支**固定有头**, 不保留旧脚本的无头 y/n 问句
     (无头虽省内存但易掉线, 想省内存的直接选直连模式)。
   - 账号登录由 pmhq 容器的 `AUTO_LOGIN_QQ` 处理, llbot 侧**不传 `-q`**。
   - 镜像源检测在 pmhq 模式下要求 llbot + pmhq 两个镜像都在该镜像源可用才命中。

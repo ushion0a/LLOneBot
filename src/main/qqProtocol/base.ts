@@ -243,7 +243,8 @@ export abstract class QQProtocolBase extends Service {
       const qrWebUrl = `https://api.2dcode.biz/v1/create-qr-code?data=${encodeURIComponent(data.qrcodeUrl)}`
       this.logger.info(`或浏览器打开二维码网址: ${qrWebUrl}`)
     } catch (e) {
-      this.logger.warn('获取登录二维码失败', e)
+      const reason = e instanceof Error ? e.message : String(e)
+      this.logger.warn(`获取登录二维码失败: ${reason}`)
     }
   }
 
