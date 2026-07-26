@@ -118,48 +118,36 @@ export class MessageBuilding {
 
   private async [ElementType.Reply](data: SendReplyElement) {
     const { replyElement } = data
-    // 有了 srcMsg，不需要提供 elems
-    /**let elems
-    if (replyElement.elements.length > 0) {
-      // 把锚点的 elements 转成简化的 text Msg.Elem 列表内联进 srcMsg.elems。
-      // 复杂段（image/video/face/...）退化成占位文本，至少让 client 渲染时
-      // 不再显示 "[原消息已过期]" —— 跟 server 端对 mention 段做的归一化是一样的思路。
-      const elemBytes = []
-      for (const el of replyElement.elements) {
-        let str, face
-        if (el.elementType === ElementType.Text) {
-          str = el.textElement!.content
-        } else if (el.elementType === ElementType.Pic) {
-          str = el.picElement!.summary || '[图片]'
-        } else if (el.elementType === ElementType.Video) {
-          str = '[视频]'
-        } else if (el.elementType === ElementType.Ptt) {
-          str = '[语音]'
-        } else if (el.elementType === ElementType.Face) {
-          const { faceType, faceIndex, faceText } = el.faceElement!
-          if (faceType === FaceType.Old || faceType === FaceType.Normal) {
-            face = faceIndex
-          } else {
-            str = faceText
+    let srcMsg = replyElement.srcMsg
+    if (srcMsg) {
+      const decoded = Msg.Message.decode(srcMsg)
+      const { elems } = decoded.body!.richText
+      const indexToExclude: number[] = []
+      for (const [index, elem] of elems.entries()) {
+        if (elem.text) {
+          const textElem = elem.text
+          const isAt = textElem.attr6Buf && textElem.attr6Buf.length > 0
+          // attr6Buf 布局：[2B flag][2B reserved][2B text len][1B atType][4B target uin BE][2B reserved]
+          if (isAt && textElem.attr6Buf!.length >= 11 && textElem.attr6Buf![6] !== 1) {
+            if (elem.text.pbReserve) {
+              const attr = Msg.TextResvAttr.decode(elem.text.pbReserve)
+              // 引用消息会有两个 at，其中一个 atMemberUin 为 0
+              if (attr.atType === 2 && attr.atMemberUin === 0) {
+                // 移除第一个 at 以及附带的空格，不然被引用的消息内容会显示有两个 at
+                indexToExclude.push(index, index + 1)
+                break
+              }
+            }
           }
-        } else if (el.elementType === ElementType.MarketFace) {
-          str = el.marketFaceElement!.faceName
-        } else if (el.elementType === ElementType.Ark) {
-          const match = el.arkElement!.bytesData!.match(/"prompt"\s*:\s*"([^"]*)"/)
-          str = match?.[1] ?? ''
-        } else if (el.elementType === ElementType.MultiForward) {
-          str = '[合并转发]'
-        }
-        if (str !== undefined) {
-          elemBytes.push(Msg.Elem.encode({ text: { str } }))
-        } else if (face !== undefined) {
-          elemBytes.push(Msg.Elem.encode({ face: { index: face } }))
         }
       }
-      if (elemBytes.length > 0) {
-        elems = elemBytes
+      if (indexToExclude.length > 0) {
+        decoded.body!.richText.elems = elems.filter((_, index) => {
+          return !indexToExclude.includes(index)
+        })
+        srcMsg = Msg.Message.encode(decoded)
       }
-    }*/
+    }
     this.outputElems.push({
       srcMsg: {
         origSeqs: [replyElement.replyMsgClientSeq || replyElement.replyMsgSeq],
@@ -169,7 +157,7 @@ export class MessageBuilding {
           senderUid: replyElement.senderUid,
           ntMsgSeq: replyElement.replyMsgClientSeq ? replyElement.replyMsgSeq : undefined
         },
-        srcMsg: replyElement.srcMsg
+        srcMsg
       }
     })
     if (this.chatType === ChatType.Group && !this.isInsideForward) {
