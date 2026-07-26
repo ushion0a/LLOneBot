@@ -31,6 +31,7 @@ export async function transformOutgoingSegments(
     senderUin: number
     senderName: string
     elements: SendMessageElement[]
+    msgSeq: number
     msgTime?: number
   }[] = []
 
@@ -289,6 +290,7 @@ export async function transformOutgoingSegments(
           senderUin: Number(segment.data.uin ?? segment.data.user_id ?? selfInfo.uin),
           senderName: segment.data.name ?? segment.data.nickname ?? selfInfo.nick,
           elements: inner.sendElements,
+          msgSeq: segment.data.seq as number,
           msgTime: segment.data.time ? +segment.data.time : undefined
         })
       }

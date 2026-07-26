@@ -312,6 +312,7 @@ export interface OB11MessageNode {
     summary?: string
     prompt?: string
     time?: number | string
+    seq?: number | string
   }
 }
 

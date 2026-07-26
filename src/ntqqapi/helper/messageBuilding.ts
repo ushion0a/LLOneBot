@@ -246,7 +246,6 @@ export class MessageBuilding {
   private async [ElementType.MultiForward](data: SendMultiForwardMsgElement) {
     const { multiForwardMsgElement } = data
     const messages: InferProtoModelInput<typeof Msg.Message>[] = []
-    let seq = Math.trunc(Math.random() * 65430)
     const preview = multiForwardMsgElement.preview ?? []
     const needGeneratePreview = preview.length === 0
     const isGroup = this.chatType === ChatType.Group
@@ -303,7 +302,7 @@ export class MessageBuilding {
           random: Math.floor(Math.random() * 4294967290),
           // bcb23ea3 把 contentHead.msgSeq 改名成 groupMsgSeqOrC2cClientSeq（字段编号 5 不变）；
           // 合并转发节点这里塞的是节点在转发包内的本地递增 seq。
-          groupMsgSeqOrC2cClientSeq: seq,
+          groupMsgSeqOrC2cClientSeq: node.msgSeq,
           msgTime: node.msgTime ?? Math.trunc(Date.now() / 1000),
           pkgNum: 1,
           pkgIndex: 0,
@@ -323,7 +322,6 @@ export class MessageBuilding {
           msgContent: content
         }
       })
-      seq++
     }
     const items = [{
       fileName: 'MultiMsg',
