@@ -530,7 +530,11 @@ export class NTFileApi extends Service {
   }
 
   async uploadGroupFile(groupCode: number, filePath: string, fileName: string, parentFolderId = '/') {
-    const result = await this.ctx.qqProtocol.getGroupFileUploadInfo(groupCode, filePath, fileName, parentFolderId)
+    let result = await this.ctx.qqProtocol.getGroupFileUploadInfo(groupCode, filePath, fileName, parentFolderId, 102)
+    if (result.retCode === -403n) {
+      // 永久空间不足，改发临时文件
+      result = await this.ctx.qqProtocol.getGroupFileUploadInfo(groupCode, filePath, fileName, parentFolderId, 104)
+    }
     if (!result.fileExist) {
       const highwaySession = await this.ctx.qqProtocol.getHighwaySession()
       const ext = Media.FileUploadExt.encode({
@@ -563,9 +567,9 @@ export class NTFileApi extends Service {
             hosts: [{
               url: {
                 unknown: 1,
-                host: result.addr.ip
+                host: result.uploadIp
               },
-              port: result.addr.port
+              port: result.uploadPort
             }]
           }
         }

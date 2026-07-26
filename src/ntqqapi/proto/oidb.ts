@@ -225,7 +225,7 @@ export namespace Oidb {
 
   export const GroupFileResp = ProtoMessage.of({
     uploadFileRsp: ProtoField(1, {
-      retCode: ProtoField(1, 'int32'),
+      retCode: ProtoField(1, 'int64'),
       retMsg: ProtoField(2, 'string'),
       clientWording: ProtoField(3, 'string'),
       uploadIp: ProtoField(4, 'string'),
