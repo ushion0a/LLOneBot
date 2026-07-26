@@ -84,6 +84,7 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
     }
 
     this.assignSequentialSeqs(nodes)
+    this.assignMissingTimes(nodes)
 
     const { sendElements, deleteAfterSentFiles } = await transformOutgoingSegments(this.ctx, nodes, peer, true)
     const returnMsg = await this.ctx.app.sendMessage(this.ctx, peer, sendElements, deleteAfterSentFiles)
@@ -122,7 +123,8 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
         name: obMsg.sender.nickname,
         uin: obMsg.sender.user_id,
         content: obMsg.message as OB11MessageData[],
-        seq: obMsg.message_seq
+        seq: obMsg.message_seq,
+        time: obMsg.time
       }
     }
   }
@@ -176,6 +178,33 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
         node.data.seq = nextSeq
       }
       nextSeq = Number(node.data.seq) + 1
+    }
+  }
+
+  private assignMissingTimes(nodes: OB11MessageNode[]) {
+    const isValidTime = (time: number | string | undefined) => {
+      const numericTime = Number(time)
+      return time !== undefined && time !== '' && Number.isFinite(numericTime) && numericTime > 0
+    }
+    const firstDefinedIndex = nodes.findIndex(node => isValidTime(node.data.time))
+
+    if (firstDefinedIndex === -1) {
+      const lastTime = Math.floor(Date.now() / 1000)
+      const firstTime = lastTime - nodes.length + 1
+      nodes.forEach((node, index) => node.data.time = firstTime + index)
+      return
+    }
+
+    const firstDefinedTime = Math.trunc(Number(nodes[firstDefinedIndex].data.time))
+    let nextTime = firstDefinedTime - firstDefinedIndex
+
+    for (const node of nodes) {
+      if (isValidTime(node.data.time)) {
+        nextTime = Math.trunc(Number(node.data.time)) + 1
+      } else {
+        node.data.time = nextTime
+        nextTime++
+      }
     }
   }
 }
