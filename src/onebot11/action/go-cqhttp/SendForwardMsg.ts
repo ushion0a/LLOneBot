@@ -57,17 +57,7 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
 
     if (nodes.some(e => e.data.id)) {
       const processedIds = new Set<string>()
-      const nodesWithSeq: {
-        node: {
-          type: OB11MessageDataType.Node
-          data: {
-            name?: string
-            uin?: number | string
-            content: OB11MessageData[] | undefined
-          }
-        }
-        msgSeq: number
-      }[] = []
+      const convertedNodes = []
       for (const item of nodes) {
         if (item.data.id) {
           const idStr = item.data.id.toString()
@@ -81,14 +71,20 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
             continue
           }
           const node = await this.getMessageNode(msgInfo, +item.data.id)
-          nodesWithSeq.push({ node, msgSeq: msgInfo.msgSeq })
+          convertedNodes.push(node)
         } else {
-          nodesWithSeq.push({ node: item, msgSeq: Number.MAX_SAFE_INTEGER })
+          convertedNodes.push(item)
         }
       }
-      nodesWithSeq.sort((a, b) => a.msgSeq - b.msgSeq)
-      nodes = nodesWithSeq.map(x => x.node)
+      nodes = convertedNodes
     }
+
+    if (nodes.some(e => e.data.seq)) {
+      this.sortNodesWithSeq(nodes)
+    }
+
+    this.assignSequentialSeqs(nodes)
+    this.assignMissingTimes(nodes)
 
     const { sendElements, deleteAfterSentFiles } = await transformOutgoingSegments(this.ctx, nodes, peer, true)
     const returnMsg = await this.ctx.app.sendMessage(this.ctx, peer, sendElements, deleteAfterSentFiles)
@@ -126,7 +122,9 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
       data: {
         name: obMsg.sender.nickname,
         uin: obMsg.sender.user_id,
-        content: obMsg.message as OB11MessageData[]
+        content: obMsg.message as OB11MessageData[],
+        seq: obMsg.message_seq,
+        time: obMsg.time
       }
     }
   }
@@ -141,6 +139,73 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
         },
       }
     })
+  }
+
+  private sortNodesWithSeq<T extends OB11MessageNode>(nodes: T[]) {
+    const sortedNodes = nodes
+      .filter((node): node is T & {
+        data: { seq: number | string }
+      } => !!node.data.seq)
+      .sort((a, b) => +a.data.seq - +b.data.seq)
+
+    let sortedIndex = 0
+    for (let index = 0; index < nodes.length; index++) {
+      if (nodes[index].data.seq) {
+        nodes[index] = sortedNodes[sortedIndex++]
+      }
+    }
+  }
+
+  private assignSequentialSeqs(nodes: OB11MessageNode[]) {
+    const firstDefinedIndex = nodes.findIndex(node =>
+      node.data.seq
+      && Number.isFinite(+node.data.seq)
+    )
+    if (firstDefinedIndex === -1) {
+      const initSeq = Math.trunc(Math.random() * 65430)
+      nodes.forEach((node, index) => node.data.seq = initSeq + index)
+      return
+    }
+
+    const firstDefinedSeq = Math.trunc(+nodes[firstDefinedIndex].data.seq!)
+    let nextSeq = Math.max(0, firstDefinedSeq - firstDefinedIndex)
+
+    for (const node of nodes) {
+      const currentSeq = Number(node.data.seq)
+      if (node.data.seq && Number.isFinite(currentSeq)) {
+        node.data.seq = Math.max(Math.trunc(currentSeq), nextSeq)
+      } else {
+        node.data.seq = nextSeq
+      }
+      nextSeq = Number(node.data.seq) + 1
+    }
+  }
+
+  private assignMissingTimes(nodes: OB11MessageNode[]) {
+    const isValidTime = (time: number | string | undefined) => {
+      const numericTime = Number(time)
+      return time !== undefined && time !== '' && Number.isFinite(numericTime) && numericTime > 0
+    }
+    const firstDefinedIndex = nodes.findIndex(node => isValidTime(node.data.time))
+
+    if (firstDefinedIndex === -1) {
+      const lastTime = Math.floor(Date.now() / 1000)
+      const firstTime = lastTime - nodes.length + 1
+      nodes.forEach((node, index) => node.data.time = firstTime + index)
+      return
+    }
+
+    const firstDefinedTime = Math.trunc(Number(nodes[firstDefinedIndex].data.time))
+    let nextTime = firstDefinedTime - firstDefinedIndex
+
+    for (const node of nodes) {
+      if (isValidTime(node.data.time)) {
+        nextTime = Math.trunc(Number(node.data.time)) + 1
+      } else {
+        node.data.time = nextTime
+        nextTime++
+      }
+    }
   }
 }
 

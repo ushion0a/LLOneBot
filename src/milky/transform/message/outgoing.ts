@@ -96,8 +96,10 @@ export async function transformOutgoingMessage(
           senderUin: number
           senderName: string
           elements: SendMessageElement[]
+          msgSeq: number
           msgTime?: number
         }[] = []
+        let seq = Math.trunc(Math.random() * 65430)
         for (const item of data.messages) {
           const res = await transformOutgoingMessage(ctx, item.segments as OutgoingSegment[], peerUid, isGroup, true)
           deleteAfterSentFiles.push(...res.deleteAfterSentFiles)
@@ -105,6 +107,7 @@ export async function transformOutgoingMessage(
             senderUin: item.user_id,
             senderName: item.sender_name,
             elements: res.elements,
+            msgSeq: seq++,
             msgTime: item.time ?? undefined
           })
         }

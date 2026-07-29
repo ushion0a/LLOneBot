@@ -286,7 +286,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       ctx.logger.error('转发消息失败:', e)
       return c.json({ success: false, message: '转发消息失败', error: (e as Error).message }, 500)
     } finally {
-      for (const f of cleanup) unlink(f).catch(() => {})
+      for (const f of cleanup) unlink(f).catch(() => { })
     }
   })
 
@@ -306,7 +306,13 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       const isGroup = srcPeer.chatType === ChatType.Group
 
       const seqs = [...msgSeqs].map(Number).sort((a, b) => a - b)
-      const nodes: { senderUin: number; senderName: string; elements: SendMessageElement[]; msgTime?: number }[] = []
+      const nodes: {
+        senderUin: number
+        senderName: string
+        elements: SendMessageElement[]
+        msgSeq: number
+        msgTime?: number
+      }[] = []
       for (const seq of seqs) {
         const res = await ctx.ntMsgApi.getSingleMsg(srcPeer, seq)
         const msg = res.msgList?.[0]
@@ -318,6 +324,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
           senderUin: msg.senderUin,
           senderName: msg.sendMemberName || msg.sendNickName || String(msg.senderUin),
           elements,
+          msgSeq: msg.msgSeq,
           msgTime: msg.msgTime,
         })
       }
@@ -333,7 +340,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       ctx.logger.error('合并转发失败:', e)
       return c.json({ success: false, message: '合并转发失败', error: (e as Error).message }, 500)
     } finally {
-      for (const f of cleanup) unlink(f).catch(() => {})
+      for (const f of cleanup) unlink(f).catch(() => { })
     }
   })
 

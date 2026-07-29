@@ -110,7 +110,9 @@ export class MessageEncoder {
       senderUin: number
       senderName: string
       elements: NT.SendMessageElement[]
+      msgSeq: number
     }[] = []
+    let seq = Math.trunc(Math.random() * 65430)
 
     for (const item of this.stack[0].children) {
       let ntElems = []
@@ -156,7 +158,8 @@ export class MessageEncoder {
       nodes.push({
         senderUin: +uin,
         senderName: nick,
-        elements: ntElems
+        elements: ntElems,
+        msgSeq: seq++
       })
     }
 

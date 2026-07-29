@@ -187,14 +187,14 @@ export function MediaMixin<T extends abstract new (...args: any[]) => QQProtocol
       }
     }
 
-    async getGroupFileUploadInfo(groupCode: number, filePath: string, fileName: string, parentFolderId: string) {
+    async getGroupFileUploadInfo(groupCode: number, filePath: string, fileName: string, parentFolderId: string, busId: number) {
       const fileSize = (await stat(filePath)).size
       const md5 = await getMd5BufferFromFile(filePath)
       const body = Oidb.GroupFileReq.encode({
         uploadFileReq: {
           groupCode,
           appId: 7,
-          busId: 102,
+          busId,
           entrance: 6,
           parentFolderId,
           fileName,
@@ -209,14 +209,7 @@ export function MediaMixin<T extends abstract new (...args: any[]) => QQProtocol
       const oidbRespBody = Oidb.Base.decode(Buffer.from(res.pb, 'hex')).body
       const { uploadFileRsp } = Oidb.GroupFileResp.decode(oidbRespBody)
       return {
-        fileExist: uploadFileRsp.fileExist,
-        fileId: uploadFileRsp.fileId,
-        fileKey: uploadFileRsp.fileKey,
-        checkKey: uploadFileRsp.checkKey,
-        addr: {
-          ip: uploadFileRsp.uploadIp,
-          port: uploadFileRsp.uploadPort,
-        },
+        ...uploadFileRsp,
         fileSize,
         md5,
       }
