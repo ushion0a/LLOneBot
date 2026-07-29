@@ -316,7 +316,7 @@ export namespace Msg {
     uin: ProtoField(1, 'uint32'),
     tipsDesc: ProtoField(3, 'string'),
     tipsTitle: ProtoField(4, 'string'),
-    /** 1001 = 异地登录顶号；2001 = 服务端主动踢出 */
+    /** 1001 = 异地登录顶号？；2001 = 服务端主动踢出 */
     code: ProtoField(5, 'uint32'),
     /** 时间戳或某种 token */
     field6: ProtoField(6, 'uint32'),

@@ -59,17 +59,12 @@ export class DirectQQProtocol extends QQProtocolBase {
   protected async start(): Promise<void> {
     this.ctx.on('nt/kicked-offline', () => {
       if (this.directStopHeartbeat) { this.directStopHeartbeat(); this.directStopHeartbeat = null }
-      // 异地登录顶号 = 密码/凭证可能已泄露. 清掉本机 session + 设备指纹, 强制换新设备身份重新扫码,
-      // 不用旧凭证快速登录 (旧凭证会跟顶号方互相顶下线). uin 优先取当前登录态.
       const kickedUin = selfInfo.uin || this.runtimeUinOverride || getSpecifiedUin() || ''
       if (kickedUin) deleteSession(kickedUin)
       deleteMachineGuid()
-      // 复用的 client 内存里还持有旧 guid (clearSession 不动它), 重新生成一个并同步给 client + native
-      // sign, 否则同进程内不重启就换不掉设备指纹. loadMachineGuidSync 见文件已删会重新随机 + 落盘.
       this.directClient?.setGuid(loadMachineGuidSync())
       this.runtimeUinOverride = null
       this.directClient?.clearSession()
-      // 主动断开触发 close -> scheduleReconnect: 顶号时服务器未必立刻断 TCP, 不断的话没有任何东西
       // 会重启扫码 loop (在线时 loop 已停). session 已删, 重连会退回扫码拉新码等用户扫.
       this.directClient?.disconnect()
     })
