@@ -186,7 +186,7 @@ export namespace Action {
 
   const QunAlbumImage = ProtoMessage.of({
     lloc: ProtoField(3, 'string'),
-    photoUrls: ProtoField(4, QunAlbumThumbnail, 'repeated'),
+    photoUrl: ProtoField(4, QunAlbumThumbnail, 'repeated'),
     defaultUrl: ProtoField(5, QunAlbumPhotoUrl, 'optional'),
   })
 
@@ -211,9 +211,6 @@ export namespace Action {
     uploadNumber: ProtoField(8, 'uint32'),
     cover: ProtoField(9, QunAlbumCover, 'optional'),
     creator: ProtoField(10, QunAlbumCreator, 'optional'),
-    field11: ProtoField(11, 'uint32'),
-    field23: ProtoField(23, 'uint32'),
-    field33: ProtoField(33, 'uint32'),
   })
 
   const QunAlbumMetaHeader = ProtoMessage.of({
@@ -293,21 +290,41 @@ export namespace Action {
   })
 
   const QunMediaImage = ProtoMessage.of({
-    field1: ProtoField(1, 'bytes', 'optional'),
     lloc: ProtoField(3, 'string'),
-    photoUrls: ProtoField(4, QunAlbumThumbnail, 'repeated'),
+    photoUrl: ProtoField(4, QunAlbumThumbnail, 'repeated'),
     defaultUrl: ProtoField(5, QunAlbumPhotoUrl, 'optional'),
-    field7: ProtoField(7, 'uint32'),
+  })
+
+  const QunMediaVideo = ProtoMessage.of({
+    id: ProtoField(1, 'string'),
+    url: ProtoField(2, 'string'),
+    cover: ProtoField(3, {
+      lloc: ProtoField(3, 'string'),
+      photoUrl: ProtoField(4, QunAlbumThumbnail, 'repeated'),
+      defaultUrl: ProtoField(5, QunAlbumPhotoUrl, 'optional'),
+    }),
+    width: ProtoField(4, 'uint32'),
+    height: ProtoField(5, 'uint32'),
+    videoTime: ProtoField(6, 'uint32'),
+    videoUrl: ProtoField(7, {
+      spec: ProtoField(1, 'uint32'),
+      url: ProtoField(2, {
+        url: ProtoField(1, 'string'),
+        width: ProtoField(2, 'uint32'),
+        height: ProtoField(3, 'uint32'),
+      }),
+    }, 'repeated'),
   })
 
   const QunMediaItem = ProtoMessage.of({
     type: ProtoField(1, 'uint32'),
     image: ProtoField(2, QunMediaImage, 'optional'),
+    video: ProtoField(3, QunMediaVideo, 'optional'),
     desc: ProtoField(4, 'string'),
-    uploaderUin: ProtoField(6, 'string'),
-    time1: ProtoField(7, 'uint32'),
+    uploader: ProtoField(6, 'string'),
+    batchId: ProtoField(7, 'uint32'),
     uploadTime: ProtoField(8, 'uint32'),
-    batchId: ProtoField(10, {
+    like: ProtoField(10, {
       key: ProtoField(1, 'string'),
     }, 'optional'),
   })
@@ -322,7 +339,7 @@ export namespace Action {
       albumId: ProtoField(2, 'string'),
       field3: ProtoField(3, 'uint32'),
       field4: ProtoField(4, 'bytes'),
-      field5: ProtoField(5, 'bytes'),
+      attachInfo: ProtoField(5, 'string'),
     }),
     sessionId: ProtoField(5, 'string'),
     headers: ProtoField(10, QunAlbumMetaHeader, 'repeated'),
@@ -334,6 +351,8 @@ export namespace Action {
     body: ProtoField(4, {
       album: ProtoField(1, QunAlbumRecord, 'optional'),
       mediaList: ProtoField(3, QunMediaItem, 'repeated'),
+      nextAttachInfo: ProtoField(5, 'string'),
+      nextHasMore: ProtoField(7, 'bool')
     }, 'optional'),
   })
 

@@ -500,7 +500,7 @@ export function GroupMixin<T extends abstract new (...args: any[]) => QQProtocol
     }
 
     /** 拉群相册媒体列表 (QunAlbum.GetMediaList) */
-    async fetchGroupAlbumMediaList(groupCode: number, albumId: string) {
+    async fetchGroupAlbumMediaList(groupCode: number, albumId: string, attachInfo?: string) {
       const reqBytes = Action.GetMediaListReq.encode({
         field1: 0,
         field2: Buffer.alloc(0),
@@ -510,7 +510,7 @@ export function GroupMixin<T extends abstract new (...args: any[]) => QQProtocol
           albumId,
           field3: 0,
           field4: Buffer.alloc(0),
-          field5: Buffer.alloc(0),
+          attachInfo,
         },
         sessionId: this.genQunAlbumSession(),
         headers: [{ name: 'fc-appid', value: '100' }],

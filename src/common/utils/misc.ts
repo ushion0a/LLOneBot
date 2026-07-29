@@ -47,6 +47,16 @@ export type DeepNonNullable<T> = T extends object
   ? { [K in keyof T]-?: DeepNonNullable<NonNullable<T[K]>> }
   : NonNullable<T>
 
+/**
+ * 递归地将 T 的所有属性变为可选（深 Partial）。
+ * 函数类型保持原样，避免把其参数/返回值误判为可展开对象。
+ */
+export type DeepPartial<T> = T extends object
+  ? T extends (...args: any[]) => any
+    ? T
+    : { [K in keyof T]?: DeepPartial<T[K]> }
+  : T
+
 export const cloneObj = <T>(obj: T) => Object.assign(
   Object.create(Object.getPrototypeOf(obj)),
   obj

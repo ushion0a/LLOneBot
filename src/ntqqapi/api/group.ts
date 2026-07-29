@@ -411,8 +411,8 @@ export class NTGroupApi extends Service {
     return await this.ctx.qqProtocol.deleteGroupAlbum(groupCode, albumId)
   }
 
-  async getGroupAlbumMediaList(groupCode: number, albumId: string) {
-    return await this.ctx.qqProtocol.fetchGroupAlbumMediaList(groupCode, albumId)
+  async getGroupAlbumMediaList(groupCode: number, albumId: string, attachInfo?: string) {
+    return await this.ctx.qqProtocol.fetchGroupAlbumMediaList(groupCode, albumId, attachInfo)
   }
 
   async setGroupPin(groupCode: number, isPinned: boolean) {
