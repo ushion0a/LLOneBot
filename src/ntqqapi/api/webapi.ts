@@ -13,25 +13,6 @@ declare module 'cordis' {
   }
 }
 
-interface ExpertInfo {
-  ret: number
-  data: {
-    m: number[]
-    g: number[]
-  }
-  delay: number
-  domainid: number
-}
-
-export enum WebHonorType {
-  ALL = 'all',
-  TALKACTIVE = 'talkative',
-  PERFROMER = 'performer',
-  LEGEND = 'legend',
-  STORONGE_NEWBI = 'strong_newbie',
-  EMOTION = 'emotion'
-}
-
 export class NTWebApi extends Service {
   static inject = ['ntUserApi']
 
@@ -53,124 +34,95 @@ export class NTWebApi extends Service {
     return Object.entries(cookieObject).map(([key, value]) => `${key}=${value}`).join('; ')
   }
 
-
-  async getGroupHonorInfo(groupCode: number, getType: string) {
-    const getDataInternal = async (groupCode: number, type: number) => {
-      const url = 'https://qun.qq.com/interactive/honorlist?gc=' + groupCode + '&type=' + type
-      let resJson
-      try {
-        const res = await HttpUtil.getText(url, 'GET', '', { 'Cookie': cookieStr })
-        const match = res.match(/window\.__INITIAL_STATE__=(.*?);/)
-        if (match) {
-          resJson = JSON.parse(match[1].trim())
-        }
-        if (type === 1) {
-          return resJson?.talkativeList
-        }
-        else {
-          return resJson?.actorList
-        }
-      } catch (e) {
-        this.ctx.logger.error('获取当前群荣耀失败', url, e)
+  async getGroupHonorTalkative(groupCode: number, pSkey: string) {
+    const cookie = `p_uin=o${selfInfo.uin}; p_skey=${pSkey}; uin=o${selfInfo.uin}`
+    const bkn = this.genBkn(pSkey.substring(0, 10))
+    const resp = await fetch(`https://qun.qq.com/cgi-bin/qunapp/honor_talkative?gc=${groupCode}&num=3000&bkn=${bkn}`, {
+      headers: {
+        'Cookie': cookie
       }
-      return undefined
-    }
-
-    const honorInfo: Dict = { group_id: groupCode }
-    const cookieObject = await this.getCookies('qun.qq.com')
-    const cookieStr = this.cookieToString(cookieObject)
-
-    if (getType === WebHonorType.TALKACTIVE || getType === WebHonorType.ALL) {
-      try {
-        const RetInternal = await getDataInternal(groupCode, 1)
-        if (!RetInternal) {
-          throw new Error('获取龙王信息失败')
-        }
-        honorInfo.current_talkative = {
-          user_id: RetInternal[0]?.uin,
-          avatar: RetInternal[0]?.avatar,
-          nickname: RetInternal[0]?.name,
-          day_count: 0,
-          description: RetInternal[0]?.desc,
-        }
-        honorInfo.talkative_list = []
-        for (const talkative_ele of RetInternal) {
-          honorInfo.talkative_list.push({
-            user_id: talkative_ele?.uin,
-            avatar: talkative_ele?.avatar,
-            description: talkative_ele?.desc,
-            day_count: 0,
-            nickname: talkative_ele?.name,
-          })
-        }
-      } catch (e) {
-        this.ctx.logger.error(e)
+    })
+    return await resp.json() as {
+      cgicode: number
+      retcode: number
+      msg: string
+      data: {
+        current_talkative: {
+          uin: number
+          day_count: number
+          avatar: string
+          avatar_size: number
+          nick: string
+        } | null
+        talkative_list: {
+          uin: number
+          update_ymd: number
+          day_count: number
+          day_count_history: number
+          day_count_max: number
+          avatar: string
+          avatar_size: number
+          nick: string
+          honor_ids: number[]
+          add_friend: number
+        }[]
+        talkative_amount: number
       }
     }
-    if (getType === WebHonorType.PERFROMER || getType === WebHonorType.ALL) {
-      try {
-        const RetInternal = await getDataInternal(groupCode, 2)
-        if (!RetInternal) {
-          throw new Error('获取群聊之火失败')
-        }
-        honorInfo.performer_list = []
-        for (const performer_ele of RetInternal) {
-          honorInfo.performer_list.push({
-            user_id: performer_ele?.uin,
-            nickname: performer_ele?.name,
-            avatar: performer_ele?.avatar,
-            description: performer_ele?.desc,
-          })
-        }
-      } catch (e) {
-        this.ctx.logger.error(e)
-      }
-    }
-    if (getType === WebHonorType.PERFROMER || getType === WebHonorType.ALL) {
-      try {
-        const RetInternal = await getDataInternal(groupCode, 3)
-        if (!RetInternal) {
-          throw new Error('获取群聊炽焰失败')
-        }
-        honorInfo.legend_list = []
-        for (const legend_ele of RetInternal) {
-          honorInfo.legend_list.push({
-            user_id: legend_ele?.uin,
-            nickname: legend_ele?.name,
-            avatar: legend_ele?.avatar,
-            desc: legend_ele?.description,
-          })
-        }
-      } catch (e) {
-        this.ctx.logger.error('获取群聊炽焰失败', e)
-      }
-    }
-    if (getType === WebHonorType.EMOTION || getType === WebHonorType.ALL) {
-      try {
-        const RetInternal = await getDataInternal(groupCode, 6)
-        if (!RetInternal) {
-          throw new Error('获取快乐源泉失败')
-        }
-        honorInfo.emotion_list = []
-        for (const emotion_ele of RetInternal) {
-          honorInfo.emotion_list.push({
-            user_id: emotion_ele?.uin,
-            nickname: emotion_ele?.name,
-            avatar: emotion_ele?.avatar,
-            desc: emotion_ele?.description,
-          })
-        }
-      } catch (e) {
-        this.ctx.logger.error('获取快乐源泉失败', e)
-      }
-    }
-    //冒尖小春笋好像已经被tx扬了
-    if (getType === WebHonorType.EMOTION || getType === WebHonorType.ALL) {
-      honorInfo.strong_newbie_list = []
-    }
-    return honorInfo
   }
 
+  async getGroupHonorContinuous(groupCode: number, type: 2 | 3 | 5, pSkey: string) {
+    const cookie = `p_uin=o${selfInfo.uin}; p_skey=${pSkey}; uin=o${selfInfo.uin}`
+    const bkn = this.genBkn(pSkey.substring(0, 10))
+    const resp = await fetch(`https://qun.qq.com/cgi-bin/qunapp/honor_continuous?gc=${groupCode}&num=3000&continuous_type=${type}&bkn=${bkn}`, {
+      headers: {
+        'Cookie': cookie
+      }
+    })
+    return await resp.json() as {
+      cgicode: number
+      retcode: number
+      msg: string
+      data: {
+        continuous_list: {
+          uin: number
+          day_count: number
+          honor_ids: unknown[]
+          avatar: string
+          avatar_size: number
+          nick: string
+          add_friend: number
+        }[]
+        total: number
+      }
+    }
+  }
+
+  async getGroupHonorEmotion(groupCode: number, pSkey: string) {
+    const cookie = `p_uin=o${selfInfo.uin}; p_skey=${pSkey}; uin=o${selfInfo.uin}`
+    const bkn = this.genBkn(pSkey.substring(0, 10))
+    const resp = await fetch(`https://qun.qq.com/cgi-bin/qunapp/honor_emotion?gc=${groupCode}&num=3000&bkn=${bkn}`, {
+      headers: {
+        'Cookie': cookie
+      }
+    })
+    return await resp.json() as {
+      cgicode: number
+      retcode: number
+      msg: string
+      data: {
+        emotion_list: {
+          uin: number
+          day_count: number
+          avatar: string
+          avatar_size: number
+          nick: string
+          add_friend: number
+        }[]
+        total: number
+      }
+    }
+  }
 
   async batchDeleteGroupMember(groupCode: number, memberUinList: string[]) {
     const cookieObject = await this.getCookies('qun.qq.com')
@@ -204,7 +156,7 @@ export class NTWebApi extends Service {
     // }
   }
 
-  async getExpertInfo(uin: number): Promise<ExpertInfo> {
+  async getExpertInfo(uin: number) {
     const pSkey = (await this.ctx.ntUserApi.getPSkey(['vip.qq.com'])).get('vip.qq.com')!
     const bkn = this.genBkn(pSkey)
     const url = `https://cgi.vip.qq.com/card/getExpertInfo?ps_tk=${bkn}&fuin=${uin}&g_tk=${bkn}`
@@ -216,7 +168,15 @@ export class NTWebApi extends Service {
         'Cookie': cookie,
       },
     })
-    return await response.json()
+    return await response.json() as {
+      ret: number
+      data: {
+        m: number[]
+        g: number[]
+      }
+      delay: number
+      domainid: number
+    }
   }
 
   async uploadGroupAlbum(groupCode: number, filePathList: string[], albumID: string) {
