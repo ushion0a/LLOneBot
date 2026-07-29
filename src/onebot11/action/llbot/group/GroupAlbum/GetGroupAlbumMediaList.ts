@@ -213,7 +213,7 @@ export class GetGroupAlbumMediaList extends BaseAction<Payload, Response> {
     const result = await this.ctx.ntGroupApi.getGroupAlbumMediaList(
       +payload.group_id,
       payload.album_id,
-      payload.attach_info
+      payload.attach_info ?? undefined  // 过滤 null
     )
     if (result.retCode !== 0) {
       throw new Error(result.retMsg)
