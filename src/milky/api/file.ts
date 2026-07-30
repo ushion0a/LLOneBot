@@ -71,7 +71,7 @@ const UploadGroupFile = defineApi(
     await writeFile(tempPath, data)
     const info = await ctx.ntFileApi.uploadGroupFile(payload.group_id, tempPath, payload.file_name, payload.parent_folder_id)
     unlink(tempPath).catch(noop)
-    const result = await ctx.ntMsgApi.sendGroupFileMessage(payload.group_id, info.fileId)
+    const result = await ctx.ntMsgApi.sendGroupFileMessage(payload.group_id, info.fileId, info.busId)
     if (result.retCode !== 0) {
       return Failed(-500, result.clientWording)
     }

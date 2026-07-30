@@ -187,7 +187,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
         for (const f of files) {
           if (chatTypeNum === ChatType.Group) {
             const info = await ctx.ntFileApi.uploadGroupFile(+peerId, f.filePath, f.fileName)
-            const result = await ctx.ntMsgApi.sendGroupFileMessage(+peerId, info.fileId)
+            const result = await ctx.ntMsgApi.sendGroupFileMessage(+peerId, info.fileId, info.busId)
             if (result.retCode !== 0) {
               return c.json({ success: false, message: '发送群文件失败', error: result.clientWording || '' }, 500)
             }

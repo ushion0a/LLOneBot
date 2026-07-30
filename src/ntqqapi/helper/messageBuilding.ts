@@ -384,7 +384,7 @@ export class MessageBuilding {
         fileName,
         inner: {
           info: {
-            busId: 102,
+            busId: uploaded.busId,
             fileId: uploaded.fileId,
             fileSize: uploaded.fileSize,
             fileName,

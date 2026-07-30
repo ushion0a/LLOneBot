@@ -1672,4 +1672,31 @@ export namespace Oidb {
       status: ProtoField(2, 'uint32')
     }, 'repeated')
   })
+
+  export const ForwardGroupFileReq = ProtoMessage.of({
+    copyToReq: ProtoField(3, {
+      groupCode: ProtoField(1, 'uint32'),
+      appId: ProtoField(2, 'uint32'),
+      srcBusId: ProtoField(3, 'uint32'),
+      srcFileId: ProtoField(4, 'string'),
+      dstBusId: ProtoField(5, 'uint32'),
+      dstUin: ProtoField(6, 'uint32'),
+      newFileName: ProtoField(40, 'string'),
+      timCloudPdirKey: ProtoField(100, 'bytes'),
+      timCloudPpdirKey: ProtoField(101, 'bytes'),
+      timCloudExtensionInfo: ProtoField(102, 'bytes'),
+      timFileExistOption: ProtoField(103, 'uint32'),
+    })
+  })
+
+  export const ForwardGroupFileResp = ProtoMessage.of({
+    copyToRsp: ProtoField(3, {
+      retCode: ProtoField(1, 'int64'),
+      retMsg: ProtoField(2, 'string'),
+      clientWording: ProtoField(3, 'string'),
+      saveFilePath: ProtoField(4, 'string'),
+      busId: ProtoField(5, 'uint32'),
+      fileName: ProtoField(40, 'string'),
+    })
+  })
 }

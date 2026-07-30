@@ -124,7 +124,7 @@ export function createGroupFilesRoutes(ctx: Context): Hono {
         return c.json({ success: false, message: `文件名 ${fileName} 不合法` }, 400)
       }
       const info = await ctx.ntFileApi.uploadGroupFile(+groupCode, filePath, fileName, folderId || '/')
-      const result = await ctx.ntMsgApi.sendGroupFileMessage(+groupCode, info.fileId)
+      const result = await ctx.ntMsgApi.sendGroupFileMessage(+groupCode, info.fileId, info.busId)
       if (result.retCode !== 0) {
         return c.json({ success: false, message: result.clientWording || '发送群文件失败' }, 500)
       }

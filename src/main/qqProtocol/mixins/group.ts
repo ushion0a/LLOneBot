@@ -134,7 +134,7 @@ export function GroupMixin<T extends abstract new (...args: any[]) => QQProtocol
     }
 
     /** 群文件 feed（0x6d9_4）—— upload 完成后调用，server 才会把文件作为聊天消息发到群里 */
-    async feedGroupFile(groupCode: number, fileId: string, msgRandom: number, busId: number = 102) {
+    async feedGroupFile(groupCode: number, fileId: string, msgRandom: number, busId: number) {
       const body = Oidb.GroupFileFeedReq.encode({
         feedsInfoReq: {
           groupCode,
@@ -551,6 +551,27 @@ export function GroupMixin<T extends abstract new (...args: any[]) => QQProtocol
       const res = await this.sendPB('OidbSvcTrpcTcp.0x88d_0', data)
       const oidbRespBody = Oidb.Base.decode(Buffer.from(res.pb, 'hex')).body
       return Oidb.FetchGroupExtraResp.decode(oidbRespBody)
+    }
+
+    async forwardGroupFile(groupCode: number, dstUin: number, fileId: string, busId: number, toFriend: boolean) {
+      const body = Oidb.ForwardGroupFileReq.encode({
+        copyToReq: {
+          groupCode,
+          appId: 1,
+          srcBusId: busId,
+          srcFileId: fileId,
+          dstBusId: toFriend ? 3 : 102,
+          dstUin
+        }
+      })
+      const data = Oidb.Base.encode({
+        command: 0x6d9,
+        subCommand: 2,
+        body
+      })
+      const res = await this.sendPB('OidbSvcTrpcTcp.0x6d9_2', data)
+      const decoded = Oidb.Base.decode(Buffer.from(res.pb, 'hex'))
+      return Oidb.ForwardGroupFileResp.decode(decoded.body)
     }
   }
   return Mixed

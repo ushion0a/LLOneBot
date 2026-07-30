@@ -39,7 +39,7 @@ export class UploadGroupFile extends BaseAction<Payload, Response> {
     if (!isLocal) {
       unlink(path).catch(noop)
     }
-    const result = await this.ctx.ntMsgApi.sendGroupFileMessage(+payload.group_id, info.fileId)
+    const result = await this.ctx.ntMsgApi.sendGroupFileMessage(+payload.group_id, info.fileId, info.busId)
     if (result.retCode !== 0) {
       throw new Error(result.clientWording)
     }

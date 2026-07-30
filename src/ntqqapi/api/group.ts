@@ -365,6 +365,14 @@ export class NTGroupApi extends Service {
     }
   }
 
+  async forwardGroupFile(groupCode: number, dstUin: number, fileId: string, busId: number, toFriend: boolean) {
+    const res = await this.ctx.qqProtocol.forwardGroupFile(groupCode, dstUin, fileId, busId, toFriend)
+    return {
+      ...res.copyToRsp,
+      retCode: Number(res.copyToRsp.retCode)
+    }
+  }
+
   async createGroupFolder(groupCode: number, folderName: string) {
     const res = await this.ctx.qqProtocol.createGroupFolder(groupCode, folderName, '/')
     return {

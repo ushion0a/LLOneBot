@@ -118,7 +118,7 @@ export class NTMsgApi extends Service {
     if (fileElem) {
       const buf = fileElem.transElemInfo!.elemValue!.subarray(3)
       const extra = Msg.GroupFileExtra.decode(buf)
-      const ret = await this.ctx.qqProtocol.feedGroupFile(groupCode!, extra.inner.info.fileId, random)
+      const ret = await this.ctx.qqProtocol.feedGroupFile(groupCode!, extra.inner.info.fileId, random, extra.inner.info.busId)
       if (ret.feedsInfoRsp.retCode !== 0n) {
         throw new Error(`发送文件失败 (code=${ret.feedsInfoRsp.retCode}): ${ret.feedsInfoRsp.clientWording}`)
       }
@@ -345,9 +345,9 @@ export class NTMsgApi extends Service {
     return await this.ctx.qqProtocol.sendC2CFileMessage(opts)
   }
 
-  async sendGroupFileMessage(groupCode: number, fileId: string) {
+  async sendGroupFileMessage(groupCode: number, fileId: string, busId: number) {
     const random = Math.floor(Math.random() * 0xffffffff)
-    const res = await this.ctx.qqProtocol.feedGroupFile(groupCode, fileId, random)
+    const res = await this.ctx.qqProtocol.feedGroupFile(groupCode, fileId, random, busId)
     return {
       ...res.feedsInfoRsp,
       retCode: Number(res.feedsInfoRsp.retCode),
