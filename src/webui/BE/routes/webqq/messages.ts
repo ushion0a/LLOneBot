@@ -272,7 +272,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       const msg = src.msgList?.[0]
       if (!msg) return c.json({ success: false, message: '找不到源消息' }, 404)
 
-      const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, srcPeer.chatType === ChatType.Group)
+      const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, srcPeer)
       cleanup = deleteAfterSentFiles
       if (elements.length === 0) return c.json({ success: false, message: '该消息无可转发内容' }, 400)
       const result = await ctx.ntMsgApi.sendMsg(targetPeer, elements)
@@ -317,7 +317,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
         const res = await ctx.ntMsgApi.getSingleMsg(srcPeer, seq)
         const msg = res.msgList?.[0]
         if (!msg) continue
-        const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, isGroup)
+        const { elements, deleteAfterSentFiles } = await rawElementsToSend(ctx, msg.elements, srcPeer)
         if (elements.length === 0) continue
         cleanup.push(...deleteAfterSentFiles)
         nodes.push({

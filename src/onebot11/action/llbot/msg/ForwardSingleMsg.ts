@@ -38,7 +38,11 @@ abstract class ForwardSingleMsg extends BaseAction<Payload, Response> {
     }
 
     // 转换消息元素
-    const { elements, deleteAfterSentFiles } = await rawElementsToSend(this.ctx, msg.elements, msg.chatType === ChatType.Group)
+    const { elements, deleteAfterSentFiles } = await rawElementsToSend(
+      this.ctx,
+      msg.elements,
+      info.peer
+    )
 
     // 发送目标的peer
     const peer = await createPeer(this.ctx, payload)

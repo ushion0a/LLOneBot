@@ -1,7 +1,9 @@
 import { Context } from 'cordis'
 import { XMLParser } from 'fast-xml-parser'
 import {
+  ChatType,
   MessageElement,
+  Peer,
   SendArkElement,
   SendFaceElement,
   SendMarketFaceElement,
@@ -21,8 +23,9 @@ import { uri2local } from '@/common/utils'
 export async function rawElementsToSend(
   ctx: Context,
   elements: MessageElement[],
-  isGroup: boolean,
+  fromPeer: Peer
 ): Promise<{ elements: SendMessageElement[]; deleteAfterSentFiles: string[] }> {
+  const isGroup = fromPeer.chatType === ChatType.Group
   const out: SendMessageElement[] = []
   const deleteAfterSentFiles: string[] = []
 
@@ -55,6 +58,14 @@ export async function rawElementsToSend(
       const url = await ctx.ntFileApi.getPttUrl(e.pttElement.fileUuid, isGroup)
       const path = await fetchFile(url)
       out.push(await SendElement.ptt(ctx, path))
+    } else if (e.fileElement) {
+      const { url } = await ctx.ntFileApi.getFileUrl(
+        e.fileElement.fileUuid,
+        isGroup,
+        isGroup ? +fromPeer.peerUid : undefined
+      )
+      const path = await fetchFile(url)
+      out.push(await SendElement.file(ctx, path, e.fileElement.fileName))
     } else if (e.arkElement) {
       out.push(e as SendArkElement)
     } else if (e.replyElement) {
