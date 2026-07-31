@@ -30,7 +30,7 @@ declare module 'cordis' {
 /**
  * QQProtocolBase: PMHQ / Direct 两模式共享的抽象层.
  * - sendPB/get_is_connected/start/getLoginQrCode 是 abstract, 由子类按各自传输实现.
- * - sendOidb / onDisconnect / maybeEmitOnline / msgPBMap 是通用工具, 在这里定型.
+ * - sendOidb / onDisconnect / maybeEmitOnline 是通用工具, 在这里定型.
  * - 具体实现: PmhqQQProtocol (WS+HTTP) / DirectQQProtocol (native sign + TCP).
  */
 export abstract class QQProtocolBase extends Service {
@@ -39,7 +39,6 @@ export abstract class QQProtocolBase extends Service {
   private disconnectCallbacks: Map<string, DisconnectCallbackInfo> = new Map()
   protected lastConnectedTime: number = Date.now()
   private disconnectCheckTimer: NodeJS.Timeout | undefined
-  public msgPBMap: Map<string, string> = new Map<string, string>()
   protected logger
 
   // 子类共享: online 事件只 emit 一次的去重 flag

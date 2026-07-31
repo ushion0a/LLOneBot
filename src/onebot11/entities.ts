@@ -53,12 +53,7 @@ export namespace OB11Entities {
     }
     if (!config || config.debug) {
       resMsg.raw = msg
-      resMsg.raw_pb = ''
-      const uniqueId = `${msg.peerUin}_${msg.msgRandom}_${msg.msgSeq}`
-      const msgPB = ctx.qqProtocol.msgPBMap.get(uniqueId)
-      if (msgPB) {
-        resMsg.raw_pb = msgPB
-      }
+      resMsg.raw_pb = msg.rawPb ?? ''
     }
     if (msg.chatType === ChatType.Group) {
       resMsg.sub_type = 'normal'

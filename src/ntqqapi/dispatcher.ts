@@ -98,7 +98,7 @@ function handleMsgPush(ctx: Context, payload: Buffer) {
     case MsgType.TempMessage:
     case MsgType.PrivateRecord:
     case MsgType.PrivateFile:
-      handleChatMessage(ctx, msg, msgType)
+      handleChatMessage(ctx, msg, msgType, payload)
       break
 
     case MsgType.GroupMemberIncrease:
@@ -709,7 +709,7 @@ async function handleGroupInvitation(ctx: Context, msg: InferProtoModel<typeof M
   }
 }
 
-function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message>, msgType: number) {
+function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message>, msgType: number, payload: Buffer) {
   const routingHead = msg.routingHead
   ctx.store.addUix([{
     uid: routingHead.fromUid,
@@ -776,6 +776,9 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
   }
   const rawMessage = convertToRawMessage(msg)
   if (!rawMessage) return
+  if (ctx.config.get().rawMsgPB) {
+    rawMessage.rawPb = payload.toString('hex')
+  }
   {
     const elemSummary = rawMessage.elements.map(e => `type=${e.elementType}` + (e.fileElement ? ` file=${e.fileElement.fileName}` : '') + (e.textElement ? ` text="${e.textElement.content?.slice(0, 30)}"` : '')).join(', ')
     logger.debug(`convertedRawMsg msgId=${rawMessage.msgId} chatType=${rawMessage.chatType} peerUin=${rawMessage.peerUin} senderUin=${rawMessage.senderUin} elementsLen=${rawMessage.elements.length} [${elemSummary}]`)
