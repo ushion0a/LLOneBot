@@ -774,11 +774,8 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
       }
     }).catch(e => ctx.logger.warn(e))
   }
-  const rawMessage = convertToRawMessage(msg)
+  const rawMessage = convertToRawMessage(msg, ctx.config.get().rawMsgPB ? payload.toString('hex') : undefined)
   if (!rawMessage) return
-  if (ctx.config.get().rawMsgPB) {
-    rawMessage.rawPb = payload.toString('hex')
-  }
   {
     const elemSummary = rawMessage.elements.map(e => `type=${e.elementType}` + (e.fileElement ? ` file=${e.fileElement.fileName}` : '') + (e.textElement ? ` text="${e.textElement.content?.slice(0, 30)}"` : '')).join(', ')
     logger.debug(`convertedRawMsg msgId=${rawMessage.msgId} chatType=${rawMessage.chatType} peerUin=${rawMessage.peerUin} senderUin=${rawMessage.senderUin} elementsLen=${rawMessage.elements.length} [${elemSummary}]`)
@@ -793,7 +790,7 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
 }
 
 /** 把 Msg.Message protobuf 转换为上层用的 RawMessage（OlPush 推送和 SsoGetGroupMsg 拉历史共用） */
-export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>): RawMessage | null {
+export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, rawPb?: string): RawMessage | null {
   const routingHead = msg.routingHead
   const contentHead = msg.contentHead
   const body = msg.body
@@ -894,6 +891,7 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>): R
     //     reply（srcMsg.origSeqs[0]）都用它定位被引用的 c2c 消息。
     // 群聊时此字段无意义，置 0。
     clientSeq: contentHead.c2cMsgSeq ? contentHead.groupMsgSeqOrC2cClientSeq : 0,
-    forwardAvatar: contentHead.forward?.avatar ?? ''
+    forwardAvatar: contentHead.forward?.avatar ?? '',
+    rawPb
   }
 }
