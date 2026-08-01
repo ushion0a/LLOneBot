@@ -19,7 +19,7 @@ interface HighwayTrans {
 }
 
 abstract class AbstractHighwaySession {
-  readonly concurrency = 4
+  readonly concurrency = 3
   /** 单调递增的 block seq */
   protected nextSeq = 1
   protected retryTimes = 0
@@ -146,7 +146,7 @@ function isValidProtoBuffer(buf: Buffer | undefined | null): boolean {
   const readTag = (): number => {
     let val = 0
     let shift = 0
-    for (;;) {
+    for (; ;) {
       if (p >= len) return -1
       const b = buf[p++]
       val |= (b & 0x7f) << shift
@@ -159,7 +159,7 @@ function isValidProtoBuffer(buf: Buffer | undefined | null): boolean {
   // 跳过 wire 0 的 value varint（uint64 最多 10 字节）。越界/超长返回 false。
   const skipVarint = (): boolean => {
     let shift = 0
-    for (;;) {
+    for (; ;) {
       if (p >= len) return false
       const b = buf[p++]
       if (!(b & 0x80)) return true
@@ -174,7 +174,7 @@ function isValidProtoBuffer(buf: Buffer | undefined | null): boolean {
   const readLength = (): number => {
     let val = 0
     let shift = 0
-    for (;;) {
+    for (; ;) {
       if (p >= len) return -1
       const b = buf[p++]
       val |= (b & 0x7f) << shift
@@ -419,7 +419,9 @@ export class HighwayHttpSession extends AbstractHighwaySession {
       } : null,
       bodyHex: body.toString('hex').slice(0, 200),
     })
-    if (headData.errorCode !== 0) throw new Error(`HTTP Upload failed with code ${headData.errorCode}`)
+    if (headData.errorCode !== 0) {
+      throw new Error(`HTTP Upload failed with code ${headData.errorCode}`)
+    }
     const segRet = headData.msgSegHead?.retCode
     if (segRet !== undefined && segRet !== 0) {
       throw new Error(`HTTP Upload seg retCode=${segRet}`)
@@ -438,7 +440,7 @@ export class HighwayHttpSession extends AbstractHighwaySession {
       const req = request(
         serverURL, {
         method: 'POST',
-        timeout: 10 * 1000,
+        timeout: 11 * 1000,
         headers: {
           // 最后一块 close，其他 keep-alive。server 用这个信号知道整体上传结束 → 触发归档
           'Connection': isEnd ? 'close' : 'keep-alive',
@@ -461,7 +463,7 @@ export class HighwayHttpSession extends AbstractHighwaySession {
         reject(error)
       })
       req.on('timeout', () => {
-        req.destroy(new Error(`Highway request timeout (10s) on ${serverURL}`))
+        req.destroy(new Error(`Highway request timeout (11s) on ${serverURL}`))
       })
       req.write(frame)
       req.end()
