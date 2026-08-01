@@ -283,7 +283,7 @@ export interface RawMessage {
   tempFromGroupCode: number
   clientSeq: number
   forwardAvatar: string
-  rawPb?: string // 原始 protobuf hex, 仅 OlPush 实时消息 + rawMsgPB 开启时有值 (debug 上报用)
+  rawPb?: string // 原始 protobuf hex (debug 上报用). 实时推送是整个 PushMsg 包, 历史拉取是单条 Msg.Message
 }
 
 export interface Peer {

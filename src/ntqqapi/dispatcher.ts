@@ -774,7 +774,7 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
       }
     }).catch(e => ctx.logger.warn(e))
   }
-  const rawMessage = convertToRawMessage(msg, ctx.config.get().rawMsgPB ? payload.toString('hex') : undefined)
+  const rawMessage = convertToRawMessage(msg, payload.toString('hex'))
   if (!rawMessage) return
   {
     const elemSummary = rawMessage.elements.map(e => `type=${e.elementType}` + (e.fileElement ? ` file=${e.fileElement.fileName}` : '') + (e.textElement ? ` text="${e.textElement.content?.slice(0, 30)}"` : '')).join(', ')

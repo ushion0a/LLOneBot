@@ -42,5 +42,4 @@ export const defaultConfig: Config = {
   musicSignUrl: 'https://ss.xingzhige.com/music_card/card',
   msgCacheExpire: 120,
   ffmpeg: '',
-  rawMsgPB: false,
 }

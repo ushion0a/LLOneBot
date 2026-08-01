@@ -19,7 +19,7 @@ declare module 'cordis' {
 }
 
 export class NTMsgApi extends Service {
-  static inject = ['ntUserApi', 'qqProtocol', 'store', 'ntFileApi', 'config']
+  static inject = ['ntUserApi', 'qqProtocol', 'store', 'ntFileApi']
 
   constructor(protected ctx: Context) {
     super(ctx, 'ntMsgApi')
@@ -170,10 +170,10 @@ export class NTMsgApi extends Service {
     return result
   }
 
-  // rawMsgPB 开启时把历史消息的原始 protobuf 转 hex 挂到 RawMessage.rawPb (debug 用).
-  // 注意: 实时 OlPush 的 rawPb 是整个 PushMsg 包, 历史拉取只有单条 Msg.Message, 语义不同.
-  private rawPbHex(bytes: Uint8Array): string | undefined {
-    return this.ctx.config.get().rawMsgPB ? Buffer.from(bytes).toString('hex') : undefined
+  // 历史消息只有单条 Msg.Message, 实时 OlPush 的 rawPb 是整个 PushMsg 包, 语义不同.
+  // 是否上报由各 connect 的 debug 开关控制 (见 entities.ts / connect 出口).
+  private rawPbHex(bytes: Uint8Array): string {
+    return Buffer.from(bytes).toString('hex')
   }
 
   async getSingleMsg(peer: Peer, msgSeq: number) {

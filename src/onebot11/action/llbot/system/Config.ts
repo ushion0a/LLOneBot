@@ -24,8 +24,7 @@ export class SetConfigAction extends BaseAction<Config, null> {
     autoDeleteFileSecond: Schema.number(),
     ffmpeg: Schema.string(),
     musicSignUrl: Schema.string(),
-    msgCacheExpire: Schema.number(),
-    rawMsgPB: Schema.boolean()
+    msgCacheExpire: Schema.number()
   })
 
   protected async _handle(payload: Config) {
