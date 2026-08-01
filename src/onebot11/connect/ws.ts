@@ -37,8 +37,16 @@ class OB11WebSocket {
       this.ctx.logger.error('OneBot V11 正向 WS 错误', err)
     })
     this.wsServer?.on('connection', (socket, req) => {
-      this.authorize(socket, req)
-      this.connect(socket, req)
+      if (this.authorize(socket, req)) {
+        this.connect(socket, req)
+        const url = req.url?.split('?').shift()
+        this.ctx.logger.info('ws connect', url)
+      } else {
+        this.reply(socket, OB11Response.res(null, 'failed', 1403, 'token验证失败'))
+        socket.close(1008, 'invalid access token')
+        const url = req.url?.split('?').shift()
+        this.ctx.logger.info('ws authentication failed', url)
+      }
     })
     this.activated = true
   }
@@ -121,29 +129,29 @@ class OB11WebSocket {
   }
 
   private authorize(socket: WebSocket, req: IncomingMessage) {
-    const url = req.url?.split('?').shift()
-    this.ctx.logger.info('ws connect', url)
-    let clientToken = ''
-    const authHeader = req.headers['authorization']
-    if (authHeader) {
-      clientToken = authHeader.split('Bearer ').pop()!
-      this.ctx.logger.info('receive ws header token', clientToken)
-    } else {
-      const { searchParams } = new URL(`http://localhost${req.url}`)
-      const urlToken = searchParams.get('access_token')
-      if (urlToken) {
-        if (Array.isArray(urlToken)) {
-          clientToken = urlToken[0]
-        } else {
-          clientToken = urlToken
+    if (this.config.token) {
+      let clientToken = ''
+      const authHeader = req.headers['authorization']
+      if (authHeader) {
+        clientToken = authHeader.split('Bearer ').pop()!
+        this.ctx.logger.info('receive ws header token', clientToken)
+      } else {
+        const { searchParams } = new URL(`http://localhost${req.url}`)
+        const urlToken = searchParams.get('access_token')
+        if (urlToken) {
+          if (Array.isArray(urlToken)) {
+            clientToken = urlToken[0]
+          } else {
+            clientToken = urlToken
+          }
+          this.ctx.logger.info('receive ws url token', clientToken)
         }
-        this.ctx.logger.info('receive ws url token', clientToken)
+      }
+      if (clientToken !== this.config.token) {
+        return false
       }
     }
-    if (this.config.token && clientToken !== this.config.token) {
-      this.reply(socket, OB11Response.res(null, 'failed', 1403, 'token验证失败'))
-      return socket.close(1008, 'invalid access token')
-    }
+    return true
   }
 
   private async handleAction(socket: WebSocket, data: RawData) {
