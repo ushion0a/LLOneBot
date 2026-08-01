@@ -132,6 +132,7 @@ class OB11Http {
       }
       if (!this.config.debug) {
         delete msg.raw
+        delete msg.raw_pb
       }
       if (this.config.messageFormat === 'string') {
         msg.message = msg.raw_message
@@ -169,15 +170,20 @@ class OB11Http {
 
   private async handleRequest(c: HonoContext) {
     let payload
-    if (c.req.method === 'POST') {
-      if (c.req.header('Content-Type')?.includes('application/x-www-form-urlencoded')) {
-        payload = await c.req.parseBody()
+    try {
+      if (c.req.method === 'POST') {
+        if (c.req.header('Content-Type')?.includes('application/x-www-form-urlencoded')) {
+          payload = await c.req.parseBody()
+        } else {
+          const text = await c.req.text()
+          payload = text ? JSON.parse(text) : {}
+        }
       } else {
-        const text = await c.req.text()
-        payload = text ? JSON.parse(text) : {}
+        payload = c.req.query()
       }
-    } else {
-      payload = c.req.query()
+    } catch (error) {
+      const { message } = error as Error
+      return c.json(OB11Response.error(`请求体解析失败: ${message}`, 400))
     }
     this.ctx.logger.info('收到 HTTP 请求', c.req.url, payload)
     const actionName = c.req.param('endpoint')!
@@ -280,6 +286,7 @@ class OB11HttpPost {
       }
       if (!this.config.debug) {
         delete msg.raw
+        delete msg.raw_pb
       }
       if (this.config.messageFormat === 'string') {
         msg.message = msg.raw_message

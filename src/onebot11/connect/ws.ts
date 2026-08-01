@@ -12,7 +12,106 @@ import { OB11BaseEvent } from '../event/OB11BaseEvent'
 import { version } from '../../version'
 import { WsConnectConfig, WsReverseConnectConfig } from '@/common/types'
 import { matchEventFilter } from '../eventfilter'
-import { constants } from 'node:buffer'
+
+// 将 ws 的 RawData 规整为单个 Buffer。
+// RawData 可能是单 Buffer，也可能是分片的 Buffer[]；统一合并以便字节扫描。
+function toBuffer(data: RawData): Buffer {
+  if (Buffer.isBuffer(data)) return data
+  if (Array.isArray(data)) return Buffer.concat(data)
+  return Buffer.from(data)
+}
+
+// JSON 解析失败时，尝试直接从原始字节流中提取 echo 字段，便于上层关联回包。
+// best-effort 恢复：支持任意 JSON 值（标量 / 对象 / 数组，任意嵌套深度）。
+// 直接对 Buffer 做字节扫描，避免整体 toString() 的大字符串开销；仅在拿到 echo
+// 片段后做一次小范围 UTF-8 解码与 JSON.parse。
+function extractEcho(buf: Buffer): unknown {
+  // 在字节流里查找 "echo" 的 ASCII 字节 (0x22 65 63 68 6f 0x22)
+  const key = [0x22, 0x65, 0x63, 0x68, 0x6f, 0x22]
+  const len = buf.length
+  let keyIdx = -1
+  outer: for (let i = 0; i <= len - key.length; i++) {
+    for (let k = 0; k < key.length; k++) {
+      if (buf[i + k] !== key[k]) continue outer
+    }
+    keyIdx = i
+    break
+  }
+  if (keyIdx < 0) return undefined
+  let i = keyIdx + key.length
+  // 跳过空白 (ASCII 空白：0x20 / 0x09 / 0x0a / 0x0d)
+  while (i < len) {
+    const b = buf[i]
+    if (b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) break
+    i++
+  }
+  if (buf[i] !== 0x3a /* ':' */) return undefined
+  i++
+  while (i < len) {
+    const b = buf[i]
+    if (b !== 0x20 && b !== 0x09 && b !== 0x0a && b !== 0x0d) break
+    i++
+  }
+  if (i >= len) return undefined
+
+  const start = i
+  const first = buf[i]
+
+  let end = start
+  if (first === 0x22 /* '"' */) {
+    // 字符串：消费直到闭合引号，处理转义 (字节 0x5c)
+    i++
+    while (i < len) {
+      const b = buf[i]
+      if (b === 0x5c) { i += 2; continue }
+      if (b === 0x22) { i++; break }
+      i++
+    }
+    end = i
+  } else if (first === 0x7b /* '{' */ || first === 0x5b /* '[' */) {
+    // 对象/数组：用深度配对，并跳过字符串内的括号
+    const open = first
+    const close = open === 0x7b ? 0x7d : 0x5d
+    let depth = 0
+    let inStr = false
+    while (i < len) {
+      const b = buf[i]
+      if (inStr) {
+        if (b === 0x5c) { i += 2; continue }
+        if (b === 0x22) inStr = false
+        i++
+        continue
+      }
+      if (b === 0x22) inStr = true
+      else if (b === open) depth++
+      else if (b === close) {
+        depth--
+        if (depth === 0) { i++; break }
+      }
+      i++
+    }
+    end = i
+  } else {
+    // 标量：number / true / false / null，消费直到 , } ] 或空白
+    while (i < len) {
+      const b = buf[i]
+      if (b === 0x2c || b === 0x7d || b === 0x5d ||
+        b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d) break
+      i++
+    }
+    end = i
+  }
+
+  if (end <= start) return undefined
+  // 仅对 echo 片段做一次小范围 UTF-8 解码（subarray 零拷贝视图）
+  const slice = buf.subarray(start, end).toString('utf8').trim()
+  if (!slice) return undefined
+  try {
+    return JSON.parse(slice)
+  } catch {
+    return undefined
+  }
+}
 
 class OB11WebSocket {
   private wsServer?: WebSocketServer
@@ -31,7 +130,7 @@ class OB11WebSocket {
     this.wsServer = new WebSocketServer({
       host,
       port: this.config.port,
-      maxPayload: constants.MAX_STRING_LENGTH
+      maxPayload: 0
     })
     this.wsServer.on('error', (err: Error) => {
       this.ctx.logger.error('OneBot V11 正向 WS 错误', err)
@@ -105,6 +204,7 @@ class OB11WebSocket {
       }
       if (!this.config.debug) {
         delete msg.raw
+        delete msg.raw_pb
       }
       if (this.config.messageFormat === 'string') {
         msg.message = msg.raw_message
@@ -139,11 +239,7 @@ class OB11WebSocket {
         const { searchParams } = new URL(`http://localhost${req.url}`)
         const urlToken = searchParams.get('access_token')
         if (urlToken) {
-          if (Array.isArray(urlToken)) {
-            clientToken = urlToken[0]
-          } else {
-            clientToken = urlToken
-          }
+          clientToken = urlToken
           this.ctx.logger.info('receive ws url token', clientToken)
         }
       }
@@ -155,14 +251,16 @@ class OB11WebSocket {
   }
 
   private async handleAction(socket: WebSocket, data: RawData) {
-    let receive: { action: ActionName | null; params: unknown; echo?: unknown } = { action: null, params: {} }
+    let receive: { action: ActionName | null, params: unknown, echo?: unknown } = { action: null, params: {} }
     try {
       receive = JSON.parse(data.toString())
       this.ctx.logger.info('收到正向 Websocket 消息', receive)
-    } catch (e) {
-      return this.reply(socket, OB11Response.error(`JSON 解析失败: ${(e as Error).message}`, 1400))
+    } catch (error) {
+      const echo = extractEcho(toBuffer(data))
+      const { message } = error as Error
+      return this.reply(socket, OB11Response.error(`JSON 解析失败: ${message}`, 1400, echo))
     }
-    const action = this.config.actionMap.get(receive.action!)!
+    const action = this.config.actionMap.get(receive.action!)
     if (!action) {
       return this.reply(socket, OB11Response.error(`${receive.action} API 不存在`, 1404, receive.echo))
     }
@@ -291,12 +389,14 @@ class OB11WebSocketReverse {
   }
 
   private async handleAction(data: RawData) {
-    let receive: { action: ActionName | null; params: unknown; echo?: unknown } = { action: null, params: {} }
+    let receive: { action: ActionName | null, params: unknown, echo?: unknown } = { action: null, params: {} }
     try {
       receive = JSON.parse(data.toString())
       this.ctx.logger.info('收到反向 Websocket 消息', receive)
-    } catch (e) {
-      return this.reply(this.wsClient!, OB11Response.error(`JSON 解析失败: ${(e as Error).message}`, 1400, receive.echo))
+    } catch (error) {
+      const echo = extractEcho(toBuffer(data))
+      const { message } = error as Error
+      return this.reply(this.wsClient!, OB11Response.error(`JSON 解析失败: ${message}`, 1400, echo))
     }
     const action = this.config.actionMap.get(receive.action!)
     if (!action) {
@@ -314,7 +414,7 @@ class OB11WebSocketReverse {
       return
     }
     this.wsClient = new WebSocket(this.config.url, {
-      maxPayload: 1024 * 1024 * 1024,
+      maxPayload: 0,
       handshakeTimeout: 2000,
       perMessageDeflate: false,
       headers: {
