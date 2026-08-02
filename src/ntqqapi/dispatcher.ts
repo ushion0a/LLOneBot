@@ -1,7 +1,7 @@
 import type { Context } from 'cordis'
 import { getLogger } from '@/common/logger'
 import { Msg, Notify } from '@/ntqqapi/proto'
-import { ChatType, ElementType, RawMessage, GroupNotificationType, RequestState } from '@/ntqqapi/types'
+import { ChatType, ElementType, RawMessage, GroupNotificationType, RequestState, GroupMemberRole } from '@/ntqqapi/types'
 import { selfInfo } from '@/common/globalVars'
 import { parseElements } from './helper/messageParsing'
 import { InferProtoModel } from '@saltify/typeproto'
@@ -750,11 +750,11 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
       }
     }
   } else if (msgType === MsgType.GroupMessage) {
-    const peerUin = routingHead.group.groupCode
+    const peerUin = routingHead.group!.groupCode
     const senderUin = routingHead.fromUin
     const senderUid = routingHead.fromUid
-    const sendMemberName = routingHead.group.groupCardType === 1 ?
-      routingHead.group.groupCard : ''
+    const sendMemberName = routingHead.group!.groupCardType === 1 ?
+      routingHead.group!.groupCard : ''
     ctx.store.getGroupMemberCardName(peerUin, senderUin).then(oldCard => {
       if (oldCard === undefined) {
         ctx.store.setGroupMemberCardName(peerUin, senderUin, sendMemberName)
@@ -809,14 +809,14 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, ra
 
   if (msgType === MsgType.GroupMessage) {
     chatType = ChatType.Group
-    peerUin = routingHead.group.groupCode
+    peerUin = routingHead.group!.groupCode
     peerUid = peerUin.toString()
-    if (routingHead.group.groupCardType === 1) {
-      sendMemberName = routingHead.group.groupCard
+    if (routingHead.group!.groupCardType === 1) {
+      sendMemberName = routingHead.group!.groupCard
     } else {
-      sendNickName = routingHead.group.groupCard
+      sendNickName = routingHead.group!.groupCard
     }
-    peerName = routingHead.group.groupName
+    peerName = routingHead.group!.groupName
   } else if (msgType === MsgType.TempMessage) {
     chatType = ChatType.TempC2CFromGroup
     // 对话另一端：自己发的消息 server 回声里 fromUid=自己，要用 toUid 当 peer
@@ -841,7 +841,7 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, ra
     sendNickName = routingHead.c2c.name // 似乎只在合并转发中存在
   }
 
-  const elements = parseElements(body?.richText?.elems || [], chatType === ChatType.Group)
+  const elements = parseElements(body?.richText?.elems ?? [], chatType === ChatType.Group)
 
   // C2C 离线文件（trans 0x211 + msgType=PrivateFile）：内容在 body.msgContent 而不是 richText.elems
   if (msgType === MsgType.PrivateFile && body?.msgContent && elements.length === 0) {
@@ -892,6 +892,11 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, ra
     // 群聊时此字段无意义，置 0。
     clientSeq: contentHead.c2cMsgSeq ? contentHead.groupMsgSeqOrC2cClientSeq : 0,
     forwardAvatar: contentHead.forward?.avatar ?? '',
-    rawPb
+    rawPb,
+    memberRole: routingHead.group ? {
+      0: GroupMemberRole.Normal,
+      8: GroupMemberRole.Owner,
+      16: GroupMemberRole.Admin
+    }[routingHead.group.msgFlag]! : GroupMemberRole.NotApplicable
   }
 }

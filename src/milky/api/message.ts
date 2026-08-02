@@ -164,9 +164,12 @@ const GetMessage = defineApi(
       const friend = await ctx.ntFriendApi.getFriendByUid(rawMsg.senderUid, false)
       message = await transformIncomingPrivateMessage(ctx, friend!, rawMsg)
     } else if (payload.message_scene === 'group') {
-      const group = await ctx.ntGroupApi.getGroup(+rawMsg.peerUid, false)
-      const member = await ctx.ntGroupApi.getGroupMemberByUid(+rawMsg.peerUin, rawMsg.senderUid, false)
-      message = await transformIncomingGroupMessage(ctx, group, member!, rawMsg)
+      const group = await ctx.ntGroupApi.getGroup(rawMsg.peerUin, false)
+      const member = await ctx.ntGroupApi.getGroupMemberByUid(rawMsg.peerUin, rawMsg.senderUid, false)
+      message = await transformIncomingGroupMessage(ctx, group, {
+        ...member!,
+        role: rawMsg.memberRole
+      }, rawMsg)
     } else {
       const group = await ctx.ntGroupApi.getGroup(rawMsg.tempFromGroupCode, false)
       message = await transformIncomingTempMessage(ctx, group, rawMsg)
@@ -225,8 +228,11 @@ const GetHistoryMessages = defineApi(
     } else if (payload.message_scene === 'group') {
       const group = await ctx.ntGroupApi.getGroup(payload.peer_id, false)
       for (const msg of msgList) {
-        const member = await ctx.ntGroupApi.getGroupMemberByUid(+msg.peerUid, msg.senderUid, false)
-        transformedMessages.push(await transformIncomingGroupMessage(ctx, group, member!, msg))
+        const member = await ctx.ntGroupApi.getGroupMemberByUid(msg.peerUin, msg.senderUid, false)
+        transformedMessages.push(await transformIncomingGroupMessage(ctx, group, {
+          ...member!,
+          role: msg.memberRole
+        }, msg))
       }
     } else {
       let group

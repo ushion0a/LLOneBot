@@ -62,6 +62,9 @@ export class NTGroupApi extends Service {
       if (this.groupsCache.length > 0 && data.targetUid === selfInfo.uid) {
         this.getGroups(true)
       }
+      if (this.membersCache.has(data.groupCode)) {
+        this.getGroupMembers(data.groupCode, true)
+      }
     })
   }
 

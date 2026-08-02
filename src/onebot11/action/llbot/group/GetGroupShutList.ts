@@ -34,9 +34,7 @@ export class GetGroupShutList extends BaseAction<Payload, GroupMember[]> {
         uin: member.uin.toString(),
         nick: member.nick,
         cardName: member.cardName,
-        role: member.role === 1 ? 4
-          : member.role === 2 ? 3
-            : 2,
+        role: member.role,
         shutUpTime: member.shutupExpireTime,
         memberRealLevel: member.level,
         memberSpecialTitle: member.specialTitle,

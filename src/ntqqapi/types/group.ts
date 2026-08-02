@@ -23,9 +23,10 @@ export interface Group {
 }
 
 export enum GroupMemberRole {
-  Normal = 0,
-  Admin = 2,
-  Owner = 1
+  NotApplicable = 0,
+  Normal = 2,
+  Admin = 3,
+  Owner = 4
 }
 
 export interface GroupMember {

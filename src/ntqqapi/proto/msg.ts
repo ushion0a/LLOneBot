@@ -217,7 +217,7 @@ export namespace Msg {
         groupName: ProtoField(7, 'string'),
         extGroupKeyInfo: ProtoField(8, 'string'),
         msgFlag: ProtoField(9, 'uint32')
-      })
+      }, 'optional')
     }),
     /**
      * OlPush.MsgPush 推下来的消息头。**注意：跟 send 时的 SendContentHead 字段布局不同。**

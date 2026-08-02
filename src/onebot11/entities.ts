@@ -62,10 +62,10 @@ export namespace OB11Entities {
       resMsg.sender.card = msg.sendMemberName
       // 284840486: 合并转发内部
       if (msg.peerUin !== 284840486) {
+        resMsg.sender.role = groupMemberRole(msg.memberRole)
         try {
           const member = await ctx.ntGroupApi.getGroupMemberByUid(msg.peerUin, msg.senderUid, false)
           resMsg.sender.nickname = member!.nick
-          resMsg.sender.role = groupMemberRole(member!.role)
           resMsg.sender.level = member!.level.toString()
           resMsg.sender.title = member!.specialTitle
         } catch {

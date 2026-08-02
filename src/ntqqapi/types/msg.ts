@@ -1,3 +1,5 @@
+import { GroupMemberRole } from "./group"
+
 export enum ElementType {
   Text = 1,
   Pic = 2,
@@ -284,6 +286,7 @@ export interface RawMessage {
   clientSeq: number
   forwardAvatar: string
   rawPb?: string // 原始 protobuf hex (debug 上报用). 实时推送是整个 PushMsg 包, 历史拉取是单条 Msg.Message
+  memberRole: GroupMemberRole
 }
 
 export interface Peer {

@@ -205,6 +205,7 @@ export function decodeGuildMember(data: NT.GroupMember): ObjectToSnake<Universal
         [NT.GroupMemberRole.Owner]: 'owner',
         [NT.GroupMemberRole.Admin]: 'admin',
         [NT.GroupMemberRole.Normal]: 'member',
+        [NT.GroupMemberRole.NotApplicable]: 'member'
       }[data.role]
     }]
   }

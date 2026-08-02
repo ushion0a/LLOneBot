@@ -19,7 +19,7 @@ export function createMembersRoutes(ctx: Context): Hono {
       const members: Dict[] = []
 
       for (const member of result) {
-        const role = member.role === 1 ? 'owner' : member.role === 2 ? 'admin' : 'member'
+        const role = member.role === 4 ? 'owner' : member.role === 3 ? 'admin' : 'member'
         members.push({
           uid: member.uid,
           uin: member.uin.toString(),

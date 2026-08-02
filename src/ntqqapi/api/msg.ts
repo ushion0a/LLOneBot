@@ -1,4 +1,4 @@
-import { ChatType, MessageElement, Peer, RawMessage, SendMessageElement } from '../types'
+import { ChatType, GroupMemberRole, MessageElement, Peer, RawMessage, SendMessageElement } from '../types'
 import { Context, Service } from 'cordis'
 import { selfInfo } from '@/common/globalVars'
 import { Msg } from '../proto'
@@ -165,7 +165,8 @@ export class NTMsgApi extends Service {
       peerName: '',
       tempFromGroupCode: chatType === ChatType.TempC2CFromGroup ? groupCode! : 0,
       clientSeq: ret.clientSequence,
-      forwardAvatar: ''
+      forwardAvatar: '',
+      memberRole: GroupMemberRole.NotApplicable
     }
     return result
   }
