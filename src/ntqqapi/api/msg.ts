@@ -1,4 +1,4 @@
-import { ChatType, GroupMemberRole, MessageElement, Peer, RawMessage, SendMessageElement } from '../types'
+import { ChatType, GroupMemberRole, GroupMsgMask, MessageElement, Peer, RawMessage, SendMessageElement } from '../types'
 import { Context, Service } from 'cordis'
 import { selfInfo } from '@/common/globalVars'
 import { Msg } from '../proto'
@@ -80,7 +80,7 @@ export class NTMsgApi extends Service {
    * 匹配条件：random 一致 + msgTime 跟 PbSendMsgResp.sendTime 同秒附近（防同 random 撞）。
    * 加重试是因为 server 入库 c2c 历史流稍滞后（~50-200ms）。
    */
-  async sendMsg(peer: Peer, msgElements: SendMessageElement[]): Promise<RawMessage> {
+  async sendMsg(peer: Peer, msgElements: SendMessageElement[], groupMsgMask?: GroupMsgMask): Promise<RawMessage> {
     let chatType = peer.chatType
     let groupCode
     if (peer.chatType === ChatType.Group) {
@@ -108,7 +108,7 @@ export class NTMsgApi extends Service {
     //   接收方在 OlPush msgType=166 contentHead.c2cMsgSeq (field 11) 拿到同样的值。
     const random = randomBytes(4).readUInt32BE(0)
     const isGroup = chatType === ChatType.Group
-    const echoP = isGroup ? this.waitForSelfEcho(peer, random, 10000) : null
+    const echoP = isGroup && groupMsgMask !== GroupMsgMask.NotAllow ? this.waitForSelfEcho(peer, random, 10000) : null
     // send 失败/禁言等会在下面 await echoP 之前就 throw，此时 echoP 变 orphaned promise，
     // 7s 后其 timer reject 无人接 -> unhandledRejection -> 崩进程。挂 no-op catch 标记为已处理，
     // 不影响后面 await echoP 的正常 resolve/reject。
@@ -136,6 +136,9 @@ export class NTMsgApi extends Service {
 
     if (ret.resultCode !== 0) {
       throw new Error(`发送消息失败 (code=${ret.resultCode}): ${ret.errMsg}`)
+    }
+    if (ret.sequence === 0) {
+      throw new Error('发送消息失败 (sequence=0)')
     }
 
     const echoed = echoP ? await echoP : undefined

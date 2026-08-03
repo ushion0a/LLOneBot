@@ -118,8 +118,10 @@ class Core extends Service {
     sendElements: SendMessageElement[],
     deleteAfterSentFiles: string[],
   ) {
+    let groupMsgMask
     if (peer.chatType === ChatType.Group) {
       const info = await ctx.ntGroupApi.getGroup(+peer.peerUid, false)
+      groupMsgMask = info.msgMask
       if (
         info.personShutupExpireTime * 1000 > Date.now()
         || (info.groupShutupExpireTime * 1000 > Date.now()
@@ -138,7 +140,7 @@ class Core extends Service {
       throw new Error('消息体无法解析，请检查是否发送了不支持的消息类型')
     }
     try {
-      const returnMsg = await ctx.ntMsgApi.sendMsg(peer, sendElements)
+      const returnMsg = await ctx.ntMsgApi.sendMsg(peer, sendElements, groupMsgMask)
       this.messageSentCount++
       if (returnMsg.chatType !== ChatType.Group) {
         // 由于私聊消息发送后没有回声，不会触发 nt/message-sent，所以补一个

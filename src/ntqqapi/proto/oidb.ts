@@ -347,7 +347,8 @@ export namespace Oidb {
       config2: ProtoField(2, {
         memberRole: ProtoField(2, 'bool'),
         remark: ProtoField(3, 'bool'),
-        personShutupExpireTime: ProtoField(4, 'bool')
+        personShutupExpireTime: ProtoField(4, 'bool'),
+        msgMask: ProtoField(7, 'bool')
       })
     })
   })
@@ -373,7 +374,8 @@ export namespace Oidb {
       personInfo: ProtoField(5, {
         memberRole: ProtoField(2, 'uint32'),
         remark: ProtoField(3, 'string', 'optional'),
-        personShutupExpireTime: ProtoField(4, 'uint32', 'optional')
+        personShutupExpireTime: ProtoField(4, 'uint32', 'optional'),
+        msgMask: ProtoField(7, 'uint32')
       })
     }, 'repeated')
   })

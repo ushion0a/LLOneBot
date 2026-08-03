@@ -85,11 +85,8 @@ export class NTGroupApi extends Service {
         isPin: !!group.info.topTime,
         groupShutupExpireTime: group.info.groupShutupExpireTime ?? 0,
         personShutupExpireTime: group.personInfo.personShutupExpireTime ?? 0,
-        memberRole: {
-          2: GroupMemberRole.Normal,
-          3: GroupMemberRole.Admin,
-          4: GroupMemberRole.Owner
-        }[group.personInfo.memberRole] ?? GroupMemberRole.Normal
+        memberRole: group.personInfo.memberRole as 2 | 3 | 4,
+        msgMask: group.personInfo.msgMask as 1 | 2 | 3 | 4
       }))
     }
     return this.groupsCache
@@ -116,7 +113,8 @@ export class NTGroupApi extends Service {
         isPin: false,
         groupShutupExpireTime: 0,
         personShutupExpireTime: info.results.shutUpMeTimestamp,
-        memberRole: GroupMemberRole.Normal
+        memberRole: GroupMemberRole.Normal,
+        msgMask: GroupMsgMask.AllowNotify
       }
       this.groupCache.set(group.groupCode, group)
       return group

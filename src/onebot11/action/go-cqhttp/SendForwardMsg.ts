@@ -92,8 +92,8 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
     // 自己发出去的群聊合并转发，OlPush 推回来的 elements 是 multiForwardMsgElement 不是 arkElement（这是 QQ NT
     // 的正常行为），而发出去的私聊合并转发没有 OlPush 推回来，故其 elements 采用输入的 elements，为 arkElement
     let forwardId
-    if (peer.chatType === ChatType.Group) {
-      forwardId = returnMsg.elements[0].multiForwardMsgElement!.resId
+    if (returnMsg.elements[0].multiForwardMsgElement) {
+      forwardId = returnMsg.elements[0].multiForwardMsgElement.resId
     } else {
       forwardId = JSON.parse(returnMsg.elements[0].arkElement!.bytesData).meta.detail.resid
     }

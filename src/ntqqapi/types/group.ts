@@ -1,8 +1,12 @@
 export enum GroupMsgMask {
-  AllowNotify = 1,  // 允许提醒
-  AllowNotNotify = 4,  // 接受消息不提醒
-  BoxNotNotify = 2,  // 收进群助手不提醒
-  NotAllow = 3,  // 屏蔽
+  /** 允许提醒 */
+  AllowNotify = 1,
+  /** 接受消息不提醒 */
+  AllowNotNotify = 4,
+  /** 收进群助手不提醒 */
+  BoxNotNotify = 2,
+  /** 屏蔽 */
+  NotAllow = 3,
 }
 
 export interface Group {
@@ -20,6 +24,7 @@ export interface Group {
   groupShutupExpireTime: number
   personShutupExpireTime: number
   memberRole: GroupMemberRole
+  msgMask: GroupMsgMask
 }
 
 export enum GroupMemberRole {
