@@ -176,8 +176,8 @@ export class NTMsgApi extends Service {
 
   // 历史消息只有单条 Msg.Message, 实时 OlPush 的 rawPb 是整个 PushMsg 包, 语义不同.
   // 是否上报由各 connect 的 debug 开关控制 (见 entities.ts / connect 出口).
-  private rawPbHex(bytes: Uint8Array): string {
-    return Buffer.from(bytes).toString('hex')
+  private rawPbHex(bytes: Buffer): string {
+    return bytes.toString('hex')
   }
 
   async getSingleMsg(peer: Peer, msgSeq: number) {
@@ -196,8 +196,7 @@ export class NTMsgApi extends Service {
     return {
       retcode,
       errorMsg,
-      msgList: filterNullable(messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e)))),
-      msgByteList: messages
+      msgList: filterNullable(messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e))))
     }
   }
 
@@ -220,8 +219,7 @@ export class NTMsgApi extends Service {
     return {
       retcode,
       errorMsg,
-      msgList: filterNullable(messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e)))),
-      msgByteList: messages
+      msgList: filterNullable(messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e))))
     }
   }
 
@@ -233,8 +231,7 @@ export class NTMsgApi extends Service {
       queryOrder ? 1 : 2
     )
     return {
-      msgList: filterNullable(res.messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e)))),
-      msgByteList: res.messages
+      msgList: filterNullable(res.messages.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e))))
     }
   }
 
@@ -381,7 +378,7 @@ export class NTMsgApi extends Service {
   async getForwardedMsgs(resId: string) {
     const { pbItemList } = await this.ctx.qqProtocol.getMultiMsg(resId)
     const top = pbItemList.find((x) => x.fileName === 'MultiMsg') ?? pbItemList[0]
-    return { msgList: filterNullable(top.buffer.msg.map(e => convertToRawMessage(e))) }
+    return { msgList: filterNullable(top.buffer.msg.map(e => convertToRawMessage(Msg.Message.decode(e), this.rawPbHex(e)))) }
   }
 
   async uploadForwardMsgs(

@@ -90,17 +90,20 @@ export async function transformOutgoingSegments(
           }
           let msg = ctx.store.getMsgByMsgId(info.msgId)
           let srcMsg
+          let fetchFromServer = false
           if (!msg) {
-            const { msgList, msgByteList } = await ctx.ntMsgApi.getSingleMsg(info.peer, info.msgSeq)
+            const { msgList } = await ctx.ntMsgApi.getSingleMsg(info.peer, info.msgSeq)
             msg = msgList[0]
-            if (isInsideForward) {
-              srcMsg = msgByteList[0]
-            }
+            fetchFromServer = true
           }
           if (msg) {
-            if (isInsideForward && !srcMsg) {
-              const { msgByteList } = await ctx.ntMsgApi.getSingleMsg(info.peer, info.msgSeq)
-              srcMsg = msgByteList[0]
+            if (isInsideForward) {
+              if (msg.rawPb) {
+                srcMsg = Buffer.from(msg.rawPb, 'hex')
+              } else if (!fetchFromServer) {
+                const { msgList } = await ctx.ntMsgApi.getSingleMsg(info.peer, info.msgSeq)
+                srcMsg = msgList[0]?.rawPb ? Buffer.from(msgList[0].rawPb, 'hex') : undefined
+              }
             }
             sendElements.push(SendElement.reply(
               msg.msgSeq,

@@ -790,7 +790,7 @@ function handleChatMessage(ctx: Context, msg: InferProtoModel<typeof Msg.Message
 }
 
 /** 把 Msg.Message protobuf 转换为上层用的 RawMessage（OlPush 推送和 SsoGetGroupMsg 拉历史共用） */
-export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, rawPb?: string): RawMessage | null {
+export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, rawPb: string): RawMessage | null {
   const routingHead = msg.routingHead
   const contentHead = msg.contentHead
   const body = msg.body

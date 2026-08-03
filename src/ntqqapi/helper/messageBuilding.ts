@@ -10,7 +10,7 @@ export class MessageBuilding {
   private outputElems: InferProtoModelInput<typeof Msg.Elem>[]
   private chatType: ChatType
   private peerUid: string
-  private nestedForwardTrace: Map<string, InferProtoModelInput<typeof Msg.Message>[]>
+  private nestedForwardTrace: Map<string, Buffer[]>
   private content?: Buffer
   private isInsideForward: boolean
 
@@ -245,7 +245,7 @@ export class MessageBuilding {
 
   private async [ElementType.MultiForward](data: SendMultiForwardMsgElement) {
     const { multiForwardMsgElement } = data
-    const messages: InferProtoModelInput<typeof Msg.Message>[] = []
+    const messages: Buffer[] = []
     const preview = multiForwardMsgElement.preview ?? []
     const needGeneratePreview = preview.length === 0
     const isGroup = this.chatType === ChatType.Group
@@ -285,7 +285,7 @@ export class MessageBuilding {
         this.nestedForwardTrace,
         true,
       ).build()
-      messages.push({
+      messages.push(Msg.Message.encode({
         routingHead: {
           fromUin: node.senderUin,
           c2c: isGroup ? undefined : {
@@ -321,7 +321,7 @@ export class MessageBuilding {
           },
           msgContent: content
         }
-      })
+      }))
     }
     const items = [{
       fileName: 'MultiMsg',

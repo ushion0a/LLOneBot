@@ -298,7 +298,7 @@ export namespace Msg {
   export const PbMultiMsgItem = ProtoMessage.of({
     fileName: ProtoField(1, 'string'),
     buffer: ProtoField(2, {
-      msg: ProtoField(1, Message, 'repeated')
+      msg: ProtoField(1, 'bytes', 'repeated')
     })
   })
 

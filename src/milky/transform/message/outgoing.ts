@@ -38,19 +38,22 @@ export async function transformOutgoingMessage(
         }
         let msg = ctx.store.getMsgBySeq(peer.peerUid, segment.data.message_seq)
         let srcMsg
+        let fetchFromServer = false
         if (!msg) {
-          const { msgList, msgByteList } = await ctx.ntMsgApi.getSingleMsg(peer, segment.data.message_seq)
+          const { msgList } = await ctx.ntMsgApi.getSingleMsg(peer, segment.data.message_seq)
           msg = msgList[0]
-          if (isInsideForward) {
-            srcMsg = msgByteList[0]
-          }
+          fetchFromServer = true
         }
         if (!msg) {
           throw new Error('被回复的消息未找到')
         }
-        if (isInsideForward && !srcMsg) {
-          const { msgByteList } = await ctx.ntMsgApi.getSingleMsg(peer, segment.data.message_seq)
-          srcMsg = msgByteList[0]
+        if (isInsideForward) {
+          if (msg.rawPb) {
+            srcMsg = Buffer.from(msg.rawPb, 'hex')
+          } else if (!fetchFromServer) {
+            const { msgList } = await ctx.ntMsgApi.getSingleMsg(peer, segment.data.message_seq)
+            srcMsg = msgList[0]?.rawPb ? Buffer.from(msgList[0].rawPb, 'hex') : undefined
+          }
         }
         elements.push(SendElement.reply(
           segment.data.message_seq,
