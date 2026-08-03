@@ -1,7 +1,7 @@
 import { defineConfig, Plugin } from 'vite'
-import { builtinModules } from 'module'
+import { builtinModules } from 'node:module'
+import { version } from './src/version.ts'
 import cp from 'vite-plugin-cp'
-import { version } from './src/version'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -18,7 +18,7 @@ function writeVersion(): Plugin {
   }
 }
 
-function getModuleDependencies(moduleName: string, basePath = path.join(__dirname, 'node_modules'), seen = new Set<string>()) {
+function getModuleDependencies(moduleName: string, basePath = path.join(import.meta.dirname, 'node_modules'), seen = new Set<string>()) {
   if (seen.has(moduleName)) {
     return []
   }
