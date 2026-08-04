@@ -144,7 +144,11 @@ export class NTGroupApi extends Service {
               joinedAt: member.joinTimestamp,
               lastSpokeAt: member.lastMsgTimestamp,
               shutupExpireTime: member.shutUpTimestamp ?? 0,
-              role: member.permission ?? 0
+              role: {
+                0: GroupMemberRole.Normal,
+                1: GroupMemberRole.Owner,
+                2: GroupMemberRole.Admin
+              }[member.permission ?? 0]!
             })
           }
           cookie = res.cookie
