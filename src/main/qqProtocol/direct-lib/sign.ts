@@ -1,11 +1,6 @@
 import { getLogger } from '@/common/logger'
 import {
-  init as nativeInit,
-  preflight as nativePreflight,
-  signRequest as nativeSignRequest,
-  acquireSignToken as nativeAcquireSignToken,
-  setAuthToken as nativeSetAuthToken,
-  setMachineGuid as nativeSetMachineGuid,
+  getSignProxy,
   type RelayPacket,
   type SignLog,
 } from './sign-proxy'
@@ -26,6 +21,7 @@ export interface PreflightLogger {
 }
 
 let inited = false
+let initError: Error
 
 export async function setupSign(opts: {
   botVersion: string
@@ -38,17 +34,22 @@ export async function setupSign(opts: {
   if (opts.machineGuid.length !== 16) {
     throw new Error(`setupSign expected 16B machineGuid, got ${opts.machineGuid.length}B`)
   }
-  await nativeInit(
-    {
-      botVersion: opts.botVersion,
-      authToken: opts.authToken,
-      machineGuidHex: opts.machineGuid.toString('hex'),
-      uin: opts.uin,
-    },
-    opts.sendPacket,
-    opts.logger ?? defaultLogger,
-  )
-  inited = true
+  try {
+    await getSignProxy().init(
+      {
+        botVersion: opts.botVersion,
+        authToken: opts.authToken,
+        machineGuidHex: opts.machineGuid.toString('hex'),
+        uin: opts.uin,
+      },
+      opts.sendPacket,
+      opts.logger ?? defaultLogger,
+    )
+    inited = true
+  } catch (error) {
+    initError = error as Error
+    throw error
+  }
 }
 
 export function setSignMachineGuid(guid: Buffer): void {
@@ -57,12 +58,13 @@ export function setSignMachineGuid(guid: Buffer): void {
     return
   }
   if (!inited) return
-  if (typeof nativeSetMachineGuid !== 'function') {
+  const { setMachineGuid } = getSignProxy()
+  if (typeof setMachineGuid !== 'function') {
     logger.warn('[Sign] sign-proxy 未导出 setMachineGuid (老版 .node), GUID 切换不会生效.')
     return
   }
   try {
-    nativeSetMachineGuid(guid.toString('hex'))
+    setMachineGuid(guid.toString('hex'))
   } catch (e) {
     logger.warn(`[Sign] setMachineGuid failed: ${(e as Error).message}`)
   }
@@ -74,7 +76,7 @@ function defaultLogger(log: SignLog): void {
 }
 
 export async function updateAuthToken(authToken: string): Promise<void> {
-  if (inited) await nativeSetAuthToken(authToken)
+  if (inited) await getSignProxy().setAuthToken(authToken)
 }
 
 export async function preflightSign(
@@ -84,7 +86,7 @@ export async function preflightSign(
 
   let reason: string | null
   try {
-    reason = await nativePreflight()
+    reason = await getSignProxy().preflight()
   } catch (e) {
     const msg = (e as Error).message
     logger.error(`[Sign Preflight] native call failed: ${msg}`)
@@ -105,12 +107,17 @@ export async function requestSign(
   protocolToken12B?: string,
 ): Promise<SignResult | null> {
   if (!inited) {
-    logger.error('[Sign] sign 未初始化 (auth_token 未配?); set data/auth_token.txt or AUTH_TOKEN env.')
+    if (initError) {
+      const { message } = initError as Error
+      logger.error(`[Sign] sign 未初始化, ${message}`)
+    } else {
+      logger.error('[Sign] sign 未初始化')
+    }
     return null
   }
 
   try {
-    const r = await nativeSignRequest({
+    const r = await getSignProxy().signRequest({
       cmd,
       bodyHex: src.toString('hex'),
       seq,
@@ -131,7 +138,7 @@ export async function requestSign(
 
 export async function acquireSignToken(uin: number, qua: string): Promise<{ token: string; ttlSecs: number }> {
   if (!inited) throw new Error('sign not initialized')
-  const r = await nativeAcquireSignToken({ uin, qua })
+  const r = await getSignProxy().acquireSignToken({ uin, qua })
   return { token: r.token.toString('utf-8'), ttlSecs: 24 * 60 * 60 }
 }
 

@@ -88,12 +88,6 @@ const triple = pickTriple()
 const version = pickVersion()
 const srcPath = join(here, `sign-proxy.${triple}.node`)
 const loadPath = ensureLoadablePath(srcPath, version, triple)
-let native: Native
-try {
-  native = requireBin(loadPath) as Native
-} catch (e) {
-  throw new Error(`sign-proxy: failed to load ${loadPath}: ${(e as Error).message}`)
-}
 
 export interface InitArgs {
   botVersion: string
@@ -150,11 +144,13 @@ export interface PostEnvelopeArgs {
   plaintextJson: string
 }
 
-export const init = native.init
-export const ping = native.ping
-export const setAuthToken = native.setAuthToken
-export const setMachineGuid = native.setMachineGuid
-export const preflight = native.preflight
-export const signRequest = native.signRequest
-export const acquireSignToken = native.acquireSignToken
-export const postEnvelope = native.postEnvelope
+let native: Native
+export function getSignProxy() {
+  try {
+    native ??= requireBin(loadPath) as Native
+    return native
+  } catch (error) {
+    const { message } = error as Error
+    throw new Error(`sign-proxy: failed to load ${loadPath}: ${message}`)
+  }
+}
