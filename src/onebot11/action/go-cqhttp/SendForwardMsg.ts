@@ -124,7 +124,15 @@ export class SendForwardMsg extends BaseAction<Payload, Response> {
         uin: obMsg.sender.user_id,
         content: obMsg.message as OB11MessageData[],
         seq: obMsg.message_seq,
-        time: obMsg.time
+        time: obMsg.time,
+        message_style: msg.msgStyle ? {
+          bubble_id: msg.msgStyle.bubbleId,
+          pendant_id: msg.msgStyle.pendantId,
+          font_id: msg.msgStyle.fontId,
+          font_effect_id: msg.msgStyle.fontEffectId,
+          is_cs_font_effect_enabled: msg.msgStyle.isCsFontEffectEnabled,
+          bubble_diy_text_id: msg.msgStyle.bubbleDiyTextId
+        } : undefined
       }
     }
   }

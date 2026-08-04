@@ -255,6 +255,7 @@ export interface MultiForwardMsgElement {
     elements: SendMessageElement[]
     msgSeq: number
     msgTime?: number
+    msgStyle?: MessageStyle
   }[]
   title: string | null
   preview: string[] | null
@@ -287,6 +288,7 @@ export interface RawMessage {
   forwardAvatar: string
   rawPb?: string // 原始 protobuf hex (debug 上报用). 实时推送是整个 PushMsg 包, 历史拉取是单条 Msg.Message
   memberRole: GroupMemberRole
+  msgStyle?: MessageStyle
 }
 
 export interface Peer {
@@ -323,4 +325,13 @@ export interface MessageElement {
   taskTopMsgElement?: unknown
   recommendedMsgElement?: unknown
   actionBarElement?: unknown
+}
+
+export interface MessageStyle {
+  bubbleId: number
+  pendantId: number
+  fontId: number
+  fontEffectId: number
+  isCsFontEffectEnabled: boolean
+  bubbleDiyTextId: number
 }

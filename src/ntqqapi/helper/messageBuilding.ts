@@ -285,6 +285,28 @@ export class MessageBuilding {
         this.nestedForwardTrace,
         true,
       ).build()
+      if (node.msgStyle) {
+        let font = node.msgStyle.fontId === 0
+          ? 0x10000n
+          : BigInt((node.msgStyle.fontId >> 8) | (node.msgStyle.fontId << 8) & 0xFFFF) | 0x20000n
+        if (node.msgStyle.isCsFontEffectEnabled) {
+          font |= 1n << 24n
+        }
+        elems.push({
+          elemFlags2: {
+            colorTextId: BigInt(node.msgStyle.bubbleId)
+          }
+        }, {
+          generalFlags: {
+            bubbleDiyTextId: node.msgStyle.bubbleDiyTextId,
+            pendantId: BigInt(node.msgStyle.pendantId),
+            pbReserve: Msg.MessageStyleExtra.encode({
+              font,
+              fontEffectId: node.msgStyle.fontEffectId
+            })
+          }
+        })
+      }
       messages.push(Msg.Message.encode({
         routingHead: {
           fromUin: node.senderUin,

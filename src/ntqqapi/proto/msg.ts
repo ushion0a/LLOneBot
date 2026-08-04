@@ -138,6 +138,35 @@ export namespace Msg {
         field31: ProtoField(31, 'string'),
       }, 'optional'),
     }, 'optional'),
+    elemFlags2: ProtoField(9, {
+      colorTextId: ProtoField(1, 'uint64'),
+      msgId: ProtoField(2, 'uint64'),
+      whisperSessionId: ProtoField(3, 'uint32'),
+      pttChangeBit: ProtoField(4, 'uint32'),
+      vipStatus: ProtoField(5, 'uint32'),
+      compatibleId: ProtoField(6, 'uint32'),
+      insts: ProtoField(7, {
+        appId: ProtoField(1, 'uint32'),
+        instId: ProtoField(2, 'uint32'),
+      }, 'repeated'),
+      msgRptCnt: ProtoField(8, 'uint32'),
+      srcInst: ProtoField(9, {
+        appId: ProtoField(1, 'uint32'),
+        instId: ProtoField(2, 'uint32'),
+      }),
+      longtitude: ProtoField(10, 'uint32'),
+      latitude: ProtoField(11, 'uint32'),
+      customFont: ProtoField(12, 'uint32'),
+      pcSupportDef: ProtoField(13, {
+        pcPtlBegin: ProtoField(1, 'uint32'),
+        pcPtlEnd: ProtoField(2, 'uint32'),
+        macPtlBegin: ProtoField(3, 'uint32'),
+        macPtlEnd: ProtoField(4, 'uint32'),
+        ptlsSupport: ProtoField(5, 'uint32', 'repeated'),
+        ptlsNotSupport: ProtoField(6, 'uint32', 'repeated'),
+      }),
+      crmFlags: ProtoField(14, 'uint32', 'optional'),
+    }, 'optional'),
     richMsg: ProtoField(12, {
       template: ProtoField(1, 'bytes'),
       serviceId: ProtoField(2, 'int32')
@@ -165,6 +194,27 @@ export namespace Msg {
       newGroupFlag: ProtoField(12, 'int32', 'optional')
     }, 'optional'),
     videoFile: ProtoField(19, 'bytes', 'optional'),
+    generalFlags: ProtoField(37, {
+      bubbleDiyTextId: ProtoField(1, 'uint32'),
+      groupFlagNew: ProtoField(2, 'int32'),
+      uin: ProtoField(3, 'uint64'),
+      rpId: ProtoField(4, 'bytes'),
+      prpFold: ProtoField(5, 'int32'),
+      longTextFlag: ProtoField(6, 'int32'),
+      longTextResId: ProtoField(7, 'string', 'optional'),
+      groupType: ProtoField(8, 'int32'),
+      toUinFlag: ProtoField(9, 'int32'),
+      glamourLevel: ProtoField(10, 'int32'),
+      memberLevel: ProtoField(11, 'int32'),
+      groupRankSeq: ProtoField(12, 'int64'),
+      olympicTorch: ProtoField(13, 'int32'),
+      babyqGuideMsgCookie: ProtoField(14, 'bytes'),
+      uin32ExpertFlag: ProtoField(15, 'int32'),
+      bubbleSubId: ProtoField(16, 'int32'),
+      pendantId: ProtoField(17, 'uint64'),
+      rpIndex: ProtoField(18, 'bytes'),
+      pbReserve: ProtoField(19, 'bytes'),
+    }, 'optional'),
     srcMsg: ProtoField(45, {
       origSeqs: ProtoField(1, 'uint32', 'repeated'),
       senderUin: ProtoField(2, 'uint32'),
@@ -637,5 +687,19 @@ export namespace Msg {
   export const PokeExtra = ProtoMessage.of({
     type: ProtoField(1, 'uint32'),
     strength: ProtoField(7, 'uint32'),
+  })
+
+  export const MessageStyleExtra = ProtoMessage.of({
+    field4: ProtoField(4, 'int32'),
+    font: ProtoField(15, 'uint64'),
+    fontEffectId: ProtoField(34, 'uint32'),
+    vipType: ProtoField(51, 'uint64'),
+    vipLevel: ProtoField(52, 'uint64'),
+    vipNameplate: ProtoField(56, 'uint64'),
+    groupMemberLevel: ProtoField(65, {
+      level: ProtoField(2, 'int32'),
+    }, 'optional'),
+    groupHonorStyle: ProtoField(81, 'uint64'),
+    messageSequence: ProtoField(107, 'uint32'),
   })
 }

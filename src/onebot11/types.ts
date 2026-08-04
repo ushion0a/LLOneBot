@@ -313,6 +313,14 @@ export interface OB11MessageNode {
     prompt?: string
     time?: number | string
     seq?: number | string
+    message_style?: {
+      bubble_id: number
+      pendant_id: number
+      font_id: number
+      font_effect_id: number
+      is_cs_font_effect_enabled: boolean
+      bubble_diy_text_id: number
+    }
   }
 }
 

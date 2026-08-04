@@ -1,7 +1,7 @@
 import type { Context } from 'cordis'
 import { getLogger } from '@/common/logger'
 import { Msg, Notify } from '@/ntqqapi/proto'
-import { ChatType, ElementType, RawMessage, GroupNotificationType, RequestState, GroupMemberRole } from '@/ntqqapi/types'
+import { ChatType, ElementType, RawMessage, GroupNotificationType, RequestState, GroupMemberRole, MessageStyle } from '@/ntqqapi/types'
 import { selfInfo } from '@/common/globalVars'
 import { parseElements } from './helper/messageParsing'
 import { InferProtoModel } from '@saltify/typeproto'
@@ -868,6 +868,24 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, ra
     }
   }
 
+  let style: Partial<MessageStyle> | undefined
+  const elems = body?.richText?.elems ?? []
+  const elemFlags2 = elems.find(e => e.elemFlags2)?.elemFlags2
+  if (elemFlags2) {
+    style = {}
+    style.bubbleId = Number(elemFlags2.colorTextId)
+  }
+  const generalFlags = elems.find(e => e.generalFlags)?.generalFlags
+  if (generalFlags) {
+    style ??= {}
+    style.bubbleDiyTextId = generalFlags.bubbleDiyTextId
+    style.pendantId = Number(generalFlags.pendantId)
+    const extra = Msg.MessageStyleExtra.decode(generalFlags.pbReserve)
+    style.fontId = Number((extra.font & 0xFF00n) >> 8n | (extra.font & 0x00FFn) << 8n)
+    style.fontEffectId = extra.fontEffectId
+    style.isCsFontEffectEnabled = (extra.font & 0x010000n) !== 0n
+  }
+
   return {
     msgId: String(contentHead.msgUid || ((0x01000000n << 32n) | BigInt(contentHead.random))),
     msgTime: contentHead.msgTime,
@@ -897,6 +915,7 @@ export function convertToRawMessage(msg: InferProtoModel<typeof Msg.Message>, ra
       0: GroupMemberRole.Normal,
       8: GroupMemberRole.Owner,
       16: GroupMemberRole.Admin
-    }[routingHead.group.msgFlag]! : GroupMemberRole.NotApplicable
+    }[routingHead.group.msgFlag]! : GroupMemberRole.NotApplicable,
+    msgStyle: style ? style as MessageStyle : undefined
   }
 }

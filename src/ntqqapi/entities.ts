@@ -4,6 +4,7 @@ import {
   AtType,
   ElementType,
   FaceIndex,
+  MessageStyle,
   SendArkElement,
   SendFaceElement,
   SendFileElement,
@@ -257,6 +258,7 @@ export namespace SendElement {
       elements: SendMessageElement[]
       msgSeq: number
       msgTime?: number
+      msgStyle?: MessageStyle
     }[],
     title?: string | null,
     preview?: string[] | null,

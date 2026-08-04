@@ -10,7 +10,7 @@ import {
   OB11MessageDataType,
   OB11MessageFileBase,
 } from '../../types'
-import { ElementType, Peer } from '@/ntqqapi/types/msg'
+import { ElementType, MessageStyle, Peer } from '@/ntqqapi/types/msg'
 import { SendElement } from '@/ntqqapi/entities'
 import { selfInfo } from '@/common/globalVars'
 import { uri2local } from '@/common/utils'
@@ -33,6 +33,7 @@ export async function transformOutgoingSegments(
     elements: SendMessageElement[]
     msgSeq: number
     msgTime?: number
+    msgStyle?: MessageStyle
   }[] = []
 
   for (const segment of messageData) {
@@ -289,12 +290,21 @@ export async function transformOutgoingSegments(
         const content = segment.data.content ? message2List(segment.data.content) : []
         const inner = await transformOutgoingSegments(ctx, content, peer, true)
         deleteAfterSentFiles.push(...inner.deleteAfterSentFiles)
+        const { message_style } = segment.data
         nodes.push({
           senderUin: Number(segment.data.uin ?? segment.data.user_id ?? selfInfo.uin),
           senderName: segment.data.name ?? segment.data.nickname ?? selfInfo.nick,
           elements: inner.sendElements,
           msgSeq: segment.data.seq as number,
-          msgTime: segment.data.time ? +segment.data.time : undefined
+          msgTime: segment.data.time ? +segment.data.time : undefined,
+          msgStyle: message_style ? {
+            bubbleId: message_style.bubble_id,
+            pendantId: message_style.pendant_id,
+            fontId: message_style.font_id,
+            fontEffectId: message_style.font_effect_id,
+            isCsFontEffectEnabled: message_style.is_cs_font_effect_enabled,
+            bubbleDiyTextId: message_style.bubble_diy_text_id
+          } : undefined
         })
       }
         break
