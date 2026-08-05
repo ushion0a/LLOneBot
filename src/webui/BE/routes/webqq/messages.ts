@@ -1,5 +1,5 @@
 import { Context } from 'cordis'
-import { ChatType, ElementType, RawMessage, SendMessageElement, SendPicElement, MessageElement } from '@/ntqqapi/types'
+import { ChatType, ElementType, RawMessage, SendMessageElement, SendPicElement, MessageElement, MessageStyle } from '@/ntqqapi/types'
 import { SendElement } from '@/ntqqapi/entities'
 import { rawElementsToSend } from '@/ntqqapi/helper/forwardMsg'
 import { serializeResult } from '../../../BE/utils'
@@ -303,7 +303,6 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
       }
       const srcPeer = await resolvePeer(Number(srcChatType), srcPeerId)
       const targetPeer = await resolvePeer(Number(targetChatType), targetPeerId)
-      const isGroup = srcPeer.chatType === ChatType.Group
 
       const seqs = [...msgSeqs].map(Number).sort((a, b) => a - b)
       const nodes: {
@@ -312,6 +311,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
         elements: SendMessageElement[]
         msgSeq: number
         msgTime?: number
+        msgStyle?: MessageStyle
       }[] = []
       for (const seq of seqs) {
         const res = await ctx.ntMsgApi.getSingleMsg(srcPeer, seq)
@@ -326,6 +326,7 @@ export function createMessagesRoutes(ctx: Context, createPicElement: (imagePath:
           elements,
           msgSeq: msg.msgSeq,
           msgTime: msg.msgTime,
+          msgStyle: msg.msgStyle,
         })
       }
       if (nodes.length === 0) return c.json({ success: false, message: '没有可转发的消息' }, 400)
