@@ -184,6 +184,8 @@ export async function uri2local(ctx: Context, uri: string, needExt?: boolean): P
         url = await ctx.ntFileApi.getVideoUrl(fileCache[0].fileUuid, isGroup)
       } else if (fileCache[0].elementType === ElementType.Ptt) {
         url = await ctx.ntFileApi.getPttUrl(fileCache[0].fileUuid, isGroup)
+      } else if (fileCache[0].elementType === ElementType.File) {
+        url = (await ctx.ntFileApi.getFileUrl(fileCache[0].fileUuid, isGroup, isGroup ? +fileCache[0].peerUid : undefined)).url
       }
       if (url) {
         return await uri2local(ctx, url, needExt)

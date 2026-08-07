@@ -152,6 +152,7 @@ export interface FileCache {
   fileSize: string
   fileUuid: string
   msgTime: number
+  peerUid: string
   chatType: number
   elementType: number
   md5HexStr: string

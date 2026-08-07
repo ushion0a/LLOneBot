@@ -90,6 +90,7 @@ export async function transformIncomingSegments(ctx: Context, message: RawMessag
       }
       ctx.store.addFileCache({
         msgTime: +message.msgTime,
+        peerUid: message.peerUid,
         chatType: message.chatType,
         elementType: element.elementType,
         fileName: picElement.fileName,
@@ -114,6 +115,7 @@ export async function transformIncomingSegments(ctx: Context, message: RawMessag
       }
       ctx.store.addFileCache({
         msgTime: +message.msgTime,
+        peerUid: message.peerUid,
         chatType: message.chatType,
         elementType: element.elementType,
         fileName: videoElement.fileName,
@@ -137,6 +139,7 @@ export async function transformIncomingSegments(ctx: Context, message: RawMessag
       }
       ctx.store.addFileCache({
         msgTime: +message.msgTime,
+        peerUid: message.peerUid,
         chatType: message.chatType,
         elementType: element.elementType,
         fileName: fileElement.fileName,
@@ -159,6 +162,7 @@ export async function transformIncomingSegments(ctx: Context, message: RawMessag
       }
       ctx.store.addFileCache({
         msgTime: +message.msgTime,
+        peerUid: message.peerUid,
         chatType: message.chatType,
         elementType: element.elementType,
         fileName: pttElement.fileName,

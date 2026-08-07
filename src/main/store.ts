@@ -84,6 +84,7 @@ class Store extends Service {
       fileSize: 'string',
       fileUuid: 'string(128)',
       msgTime: 'unsigned(10)',
+      peerUid: 'string(24)',
       chatType: 'unsigned',
       elementType: 'unsigned',
       md5HexStr: 'string(32)',
