@@ -243,6 +243,7 @@ export function GroupMixin<T extends abstract new (...args: any[]) => QQProtocol
             question: '',
             description: '',
             shutUpMeTimestamp: true,
+            richGroupName: '',
           },
         },
       })

@@ -101,7 +101,7 @@ export class NTGroupApi extends Service {
       const { info } = await this.ctx.qqProtocol.fetchGroup(groupCode)
       const group = {
         groupCode: info.groupCode,
-        groupName: info.results.groupName,
+        groupName: info.results.richGroupName ?? info.results.groupName,
         ownerUid: info.results.ownerUid,
         createdAt: info.results.groupCreateTime,
         maxMemberCount: info.results.maxMemberNum,

@@ -718,7 +718,8 @@ export namespace Oidb {
         groupName: ProtoField(15, 'string'),
         question: ProtoField(24, 'string'),
         description: ProtoField(40, 'string'),
-        shutUpMeTimestamp: ProtoField(46, 'bool')
+        shutUpMeTimestamp: ProtoField(46, 'bool'),
+        richGroupName: ProtoField(89, 'string')
       })
     })
   })
@@ -734,7 +735,8 @@ export namespace Oidb {
         groupName: ProtoField(15, 'string'),
         question: ProtoField(24, 'string'),
         description: ProtoField(40, 'string', 'optional'),
-        shutUpMeTimestamp: ProtoField(46, 'uint32')
+        shutUpMeTimestamp: ProtoField(46, 'uint32'),
+        richGroupName: ProtoField(89, 'string', 'optional')
       })
     })
   })
