@@ -19,7 +19,7 @@ import {
   GetForwardedMessagesOutput,
 } from '../generated/schema'
 import z from 'zod'
-import { ChatType, IMAGE_HTTP_HOST_NT, RawMessage } from '@/ntqqapi/types'
+import { ChatType, GroupMemberRole, IMAGE_HTTP_HOST_NT, RawMessage, User } from '@/ntqqapi/types'
 import { Media } from '@/ntqqapi/proto'
 
 const SendPrivateMessage = defineApi(
@@ -227,12 +227,35 @@ const GetHistoryMessages = defineApi(
       }
     } else if (payload.message_scene === 'group') {
       const group = await ctx.ntGroupApi.getGroup(payload.peer_id, false)
+      const infos = new Map<string, User>()
       for (const msg of msgList) {
         const member = await ctx.ntGroupApi.getGroupMemberByUid(msg.peerUin, msg.senderUid, false)
-        transformedMessages.push(await transformIncomingGroupMessage(ctx, group, {
-          ...member!,
-          role: msg.memberRole
-        }, msg))
+        if (member) {
+          transformedMessages.push(await transformIncomingGroupMessage(ctx, group, {
+            ...member,
+            role: msg.memberRole
+          }, msg))
+        } else {
+          let info
+          if (infos.has(msg.senderUid)) {
+            info = infos.get(msg.senderUid)!
+          } else {
+            info = await ctx.ntUserApi.getUserByUid(msg.senderUid)
+            infos.set(msg.senderUid, info)
+          }
+          transformedMessages.push(await transformIncomingGroupMessage(ctx, group, {
+            uin: info.uin,
+            uid: msg.senderUid,
+            nick: info.nick,
+            cardName: '',
+            specialTitle: '',
+            level: 0,
+            joinedAt: 0,
+            lastSpokeAt: 0,
+            shutupExpireTime: 0,
+            role: GroupMemberRole.Normal
+          }, msg))
+        }
       }
     } else {
       let group
