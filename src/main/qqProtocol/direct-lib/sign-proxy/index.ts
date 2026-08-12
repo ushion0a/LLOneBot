@@ -151,6 +151,10 @@ export function getSignProxy() {
     return native
   } catch (error) {
     const { message } = error as Error
-    throw new Error(`sign-proxy: failed to load ${loadPath}: ${message}`)
+    // Windows 上 .node 常被杀毒软件误杀/隔离, require 直接报文件缺失或加载失败.
+    const hint = process.platform === 'win32'
+      ? ` (${loadPath} 可能被杀毒软件删除或隔离, 请检查杀软记录并将其加入白名单)`
+      : ''
+    throw new Error(`sign-proxy: failed to load ${loadPath}: ${message}${hint}`)
   }
 }
