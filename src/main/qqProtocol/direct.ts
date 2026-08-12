@@ -57,15 +57,19 @@ export class DirectQQProtocol extends QQProtocolBase {
   }
 
   protected async start(): Promise<void> {
-    this.ctx.on('nt/kicked-offline', () => {
+    this.ctx.on('nt/kicked-offline', (data) => {
       if (this.directStopHeartbeat) { this.directStopHeartbeat(); this.directStopHeartbeat = null }
-      const kickedUin = selfInfo.uin || this.runtimeUinOverride || getSpecifiedUin() || ''
-      if (kickedUin) deleteSession(kickedUin)
-      deleteMachineGuid()
-      this.directClient?.setGuid(loadMachineGuidSync())
-      this.runtimeUinOverride = null
-      this.directClient?.clearSession()
-      // 会重启扫码 loop (在线时 loop 已停). session 已删, 重连会退回扫码拉新码等用户扫.
+      // 只有异地登录顶号(code=1001, 密码/设备指纹可能泄露)才清设备指纹 + session, 换新身份退回扫码.
+      // 其他掉线(服务端主动踢 / 未知 code)保留 guid + session, 让 close->scheduleReconnect 用旧凭证快速重连.
+      if (data.kickedType === 1001) {
+        const kickedUin = selfInfo.uin || this.runtimeUinOverride || getSpecifiedUin() || ''
+        if (kickedUin) deleteSession(kickedUin)
+        deleteMachineGuid()
+        this.directClient?.setGuid(loadMachineGuidSync())
+        this.runtimeUinOverride = null
+        this.directClient?.clearSession()
+      }
+      // 会重启扫码 loop (在线时 loop 已停). 顶号时 session 已删, 重连退回扫码; 否则用保存 session 重连.
       this.directClient?.disconnect()
     })
     // 监听 data/auth_token.txt: 启动即读一次 + 文件变化时读取 -> 校验 -> 通过则触发登录.
@@ -350,9 +354,9 @@ export class DirectQQProtocol extends QQProtocolBase {
       this.onlineEmitted = false
       if (wasOnline) {
         this.ctx.parallel('protocol/disconnect')
-        // 网络断开: 用保存的 session 快速重连 (runtimeUinOverride 已在登录成功时记下).
-        // 顶号(kick): nt/kicked-offline 已删 session + guid 并清 runtimeUinOverride, 故重连会退回
-        // 扫码 -- 不会用旧凭证跟顶号方互相顶下线, 安全. 两种都重连, 只有主动 logout 不重连.
+        // 网络断开 / 普通踢下线: 用保存的 session 快速重连 (runtimeUinOverride 在登录成功时记下).
+        // 异地顶号(code=1001): nt/kicked-offline 已删 session + guid 并清 runtimeUinOverride, 故重连退回
+        // 扫码 -- 不会用旧凭证跟顶号方互相顶下线, 安全. 三种都重连, 只有主动 logout 不重连.
         if (!this.manualLogout) this.scheduleReconnect()
       }
     })
