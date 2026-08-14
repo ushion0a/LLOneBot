@@ -211,7 +211,7 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
           const chat = currentChatRef.current
 
           // 无论是否匹配当前聊天，都要缓存消息
-          appendCachedMessage(chatType, peerId, rawMessage)
+          appendCachedMessage(chatType, peerId.toString(), rawMessage)
 
           if (chat && chat.chatType === chatType && chat.peerId === peerId) {
             if (onNewMessageRef.current) {
@@ -240,7 +240,7 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
             peerAvatar = `https://q1.qlogo.cn/g?b=qq&nk=${peerId}&s=640`
           }
 
-          updateRecentChat(chatType, peerId.toString(), lastMessage, parseInt(rawMessage.msgTime) * 1000, peerName, peerAvatar)
+          updateRecentChat(chatType, peerId.toString(), lastMessage, rawMessage.msgTime * 1000, peerName, peerAvatar)
         } else if (data.type === 'emoji-reaction') {
           // 处理表情回应事件
           const { groupCode, msgSeq, emojiId, userId, userName, isAdd } = data.data
