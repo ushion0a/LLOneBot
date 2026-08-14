@@ -84,7 +84,7 @@ export function registerDispatcher(ctx: Context) {
 
 function handleMsgPush(ctx: Context, payload: Buffer) {
   const pushMsg = Msg.PushMsg.decode(payload)
-  const msg = pushMsg.message
+  const msg = Msg.Message.decode(pushMsg.message)
   logger.debug(`MsgPush msgType=${msg?.contentHead.msgType} subType=${msg?.contentHead.subType} fromUid=${msg?.routingHead?.fromUid ?? '?'} fromUin=${msg?.routingHead?.fromUin ?? '?'} groupCode=${msg?.routingHead?.group?.groupCode ?? '?'}`)
   if (!msg) return
 
@@ -98,7 +98,7 @@ function handleMsgPush(ctx: Context, payload: Buffer) {
     case MsgType.TempMessage:
     case MsgType.PrivateRecord:
     case MsgType.PrivateFile:
-      handleChatMessage(ctx, msg, msgType, payload)
+      handleChatMessage(ctx, msg, msgType, pushMsg.message)
       break
 
     case MsgType.GroupMemberIncrease:
