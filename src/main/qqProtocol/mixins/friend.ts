@@ -15,12 +15,12 @@ export function FriendMixin<T extends abstract new (...args: any[]) => QQProtoco
     /**
      * 取私聊文件下载 url。field 10 是 query 发起者自己的 uid（PMHQ 抓包验过）。
      */
-    async getPrivateFileUrl(fileUuid: string) {
+    async getPrivateFileUrl(receiverUid: string, fileUuid: string) {
       const body = Oidb.GetPrivateFileReq.encode({
         subCommand: 1200,
         field2: 1,
         body: {
-          receiverUid: selfInfo.uid,
+          receiverUid,
           fileUuid,
           type: 2,
           fileHash: '',

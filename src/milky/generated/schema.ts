@@ -1,8 +1,8 @@
-// Generated from Milky 1.3 (1.3.0-rc.1)
+// Generated from Milky 1.3 (1.3.0)
 import { z } from 'zod';
 
 export const milkyVersion = '1.3';
-export const milkyPackageVersion = '1.3.0-rc.1';
+export const milkyPackageVersion = '1.3.0';
 
 export const zUin = z.number().int().min(10001).max(4294967295);
 
@@ -913,7 +913,7 @@ export const GetImplInfoOutput = z.object({
   impl_version: z.string().describe('协议端版本'),
   qq_protocol_version: z.string().describe('协议端使用的 QQ 协议版本'),
   qq_protocol_type: z.enum(['windows', 'linux', 'macos', 'android_pad', 'android_phone', 'ipad', 'iphone', 'harmony', 'watch']).describe('协议端使用的 QQ 协议平台'),
-  milky_version: z.string().describe('协议端实现的 Milky 协议版本，目前为 "1.2"'),
+  milky_version: z.string().describe('协议端实现的 Milky 协议版本，目前为 "1.3"'),
 }).describe('get_impl_info 响应数据');
 export type GetImplInfoOutput = z.output<typeof GetImplInfoOutput>;
 
@@ -1366,6 +1366,7 @@ export const GetPrivateFileDownloadUrlInput = z.object({
   user_id: zUin.describe('好友 QQ 号'),
   file_id: z.string().describe('文件 ID'),
   file_hash: z.string().describe('文件的 TriSHA1 哈希值'),
+  is_self_send: z.boolean().nullish().default(false).transform<boolean>((val) => val ?? false).describe('是否为自己发送的文件'),
 }).describe('get_private_file_download_url 请求参数');
 export type GetPrivateFileDownloadUrlInput = z.input<typeof GetPrivateFileDownloadUrlInput>;
 

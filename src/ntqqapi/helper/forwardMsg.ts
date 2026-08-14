@@ -13,6 +13,7 @@ import {
 } from '../types'
 import { SendElement } from '../entities'
 import { uri2local } from '@/common/utils'
+import { selfInfo } from '@/common/globalVars'
 
 /**
  * 把收到的消息 elements 转成可再次发送的 SendMessageElement[] (转发/re-send 用).
@@ -62,7 +63,7 @@ export async function rawElementsToSend(
       const { url } = await ctx.ntFileApi.getFileUrl(
         e.fileElement.fileUuid,
         isGroup,
-        isGroup ? +fromPeer.peerUid : undefined
+        isGroup ? fromPeer.peerUid : selfInfo.uid
       )
       const path = await fetchFile(url)
       out.push(await SendElement.file(ctx, path, e.fileElement.fileName))
