@@ -100,7 +100,7 @@ type Uri2LocalRes = {
   isLocal: boolean
 }
 
-export async function uri2local(ctx: Context, uri: string, needExt?: boolean): Promise<Uri2LocalRes> {
+export async function uri2local(ctx: Context, uri: string, needExt?: boolean, fileName?: string): Promise<Uri2LocalRes> {
   const { type } = checkUriType(uri)
 
   if (type === FileUriType.FileURL) {
@@ -120,17 +120,23 @@ export async function uri2local(ctx: Context, uri: string, needExt?: boolean): P
   if (type === FileUriType.RemoteURL) {
     try {
       const res = await fetchFile(uri)
-      let fileName = randomUUID()
-      let filePath = path.join(TEMP_DIR, fileName)
-      await fsPromise.writeFile(filePath, res.data)
-      if (needExt) {
-        const ext = (await getFileType(filePath)).ext
-        fileName += `.${ext}`
-        const newPath = `${filePath}.${ext}`
-        await fsPromise.rename(filePath, newPath)
-        filePath = newPath
+      if (fileName) {
+        const filePath = path.join(TEMP_DIR, randomUUID())
+        await fsPromise.writeFile(filePath, res.data)
+        return { success: true, errMsg: '', fileName, path: filePath, isLocal: false }
+      } else {
+        let fileName = randomUUID()
+        let filePath = path.join(TEMP_DIR, fileName)
+        await fsPromise.writeFile(filePath, res.data)
+        if (needExt) {
+          const ext = (await getFileType(filePath)).ext
+          fileName += `.${ext}`
+          const newPath = `${filePath}.${ext}`
+          await fsPromise.rename(filePath, newPath)
+          filePath = newPath
+        }
+        return { success: true, errMsg: '', fileName, path: filePath, isLocal: false }
       }
-      return { success: true, errMsg: '', fileName, path: filePath, isLocal: false }
     } catch (e) {
       const errMsg = `${uri} 下载失败, ${(e as Error).message}`
       return { success: false, errMsg, fileName: '', path: '', isLocal: false }
@@ -170,12 +176,16 @@ export async function uri2local(ctx: Context, uri: string, needExt?: boolean): P
   }
 
   if (type === FileUriType.Unknown) {
+    let fileName
     // uri可能是文件名
     let fileCache = await ctx.store.getFileCacheById(uri)
-    if (!fileCache?.length) {
+    if (!fileCache.length) {
       fileCache = await ctx.store.getFileCacheByName(uri)
+      if (fileCache.length) {
+        fileName = uri
+      }
     }
-    if (fileCache?.length) {
+    if (fileCache.length) {
       const isGroup = fileCache[0].chatType === ChatType.Group
       let url
       if (fileCache[0].elementType === ElementType.Pic) {
@@ -188,7 +198,7 @@ export async function uri2local(ctx: Context, uri: string, needExt?: boolean): P
         url = (await ctx.ntFileApi.getFileUrl(fileCache[0].fileUuid, isGroup, isGroup ? +fileCache[0].peerUid : undefined)).url
       }
       if (url) {
-        return await uri2local(ctx, url, needExt)
+        return await uri2local(ctx, url, needExt, fileName)
       } else {
         return { success: false, errMsg: `不支持的文件类型: ${fileCache[0].elementType}`, fileName: '', path: '', isLocal: false }
       }
