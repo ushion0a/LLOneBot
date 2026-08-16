@@ -12,20 +12,20 @@ describe('notification routes', () => {
 
   describe('GET /notifications/group', () => {
     it('returns enriched group notifications', async () => {
-      ctx.ntGroupApi.getGroupRequest.mockResolvedValue({
-        notifies: [
+      ctx.ntGroupApi.getGroupNotifications.mockResolvedValue({
+        notifications: [
           {
-            seq: '1',
+            sequence: 1,
             type: 1,
-            status: 0,
+            requestState: 0,
             group: { groupCode: '111', groupName: 'TestGroup' },
             user1: { uid: 'uid1' },
             user2: { uid: 'uid2' },
-            postscript: 'hello',
-            actionTime: '1234567890',
+            comment: 'hello',
+            time: '1234567890',
           },
         ],
-        normalCount: 1,
+        nextStartSeq: 0,
       })
       ctx.ntUserApi.getUinByUid.mockResolvedValue('999')
       const app = createTestApp(createNotificationRoutes(ctx))
@@ -40,16 +40,16 @@ describe('notification routes', () => {
     })
 
     it('handles getUinByUid failure gracefully', async () => {
-      ctx.ntGroupApi.getGroupRequest.mockResolvedValue({
-        notifies: [{
-          seq: '1', type: 1, status: 0,
+      ctx.ntGroupApi.getGroupNotifications.mockResolvedValue({
+        notifications: [{
+          sequence: 1, type: 1, requestState: 0,
           group: { groupCode: '111' },
           user1: { uid: 'uid1' },
           user2: { uid: '' },
-          postscript: '',
-          actionTime: '',
+          comment: '',
+          time: '',
         }],
-        normalCount: 1,
+        nextStartSeq: 0,
       })
       ctx.ntUserApi.getUinByUid.mockRejectedValue(new Error('not found'))
       const app = createTestApp(createNotificationRoutes(ctx))
@@ -126,7 +126,7 @@ describe('notification routes', () => {
       expect(res.status).toBe(400)
     })
 
-    it('calls handleGroupRequest with approve', async () => {
+    it('calls setGroupRequest with approve', async () => {
       const app = createTestApp(createNotificationRoutes(ctx))
       const res = await app.request('/notifications/group/handle', {
         method: 'POST',
@@ -134,10 +134,10 @@ describe('notification routes', () => {
         body: JSON.stringify({ flag: '111|1|1|0', action: 'approve' }),
       })
       expect(res.status).toBe(200)
-      expect(ctx.ntGroupApi.handleGroupRequest).toHaveBeenCalledWith('111|1|1|0', 1, undefined)
+      expect(ctx.ntGroupApi.setGroupRequest).toHaveBeenCalledWith(false, 111, 1, 1, true, undefined)
     })
 
-    it('calls handleGroupRequest with reject', async () => {
+    it('calls setGroupRequest with reject', async () => {
       const app = createTestApp(createNotificationRoutes(ctx))
       const res = await app.request('/notifications/group/handle', {
         method: 'POST',
@@ -145,7 +145,7 @@ describe('notification routes', () => {
         body: JSON.stringify({ flag: '111|1|1|0', action: 'reject', reason: 'no' }),
       })
       expect(res.status).toBe(200)
-      expect(ctx.ntGroupApi.handleGroupRequest).toHaveBeenCalledWith('111|1|1|0', 2, 'no')
+      expect(ctx.ntGroupApi.setGroupRequest).toHaveBeenCalledWith(false, 111, 1, 1, false, 'no')
     })
   })
 

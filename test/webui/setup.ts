@@ -42,4 +42,5 @@ vi.mock('@/main/log', () => ({
 
 vi.mock('@/common/utils/environment', () => ({
   isDockerEnvironment: vi.fn(() => false),
+  isPmhqMode: vi.fn(() => false),
 }))

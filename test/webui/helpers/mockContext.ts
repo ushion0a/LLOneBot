@@ -14,29 +14,30 @@ export function createMockContext() {
       })),
       getFriendRequests: vi.fn(() => Promise.resolve([])),
       getDoubtFriendRequests: vi.fn(() => Promise.resolve([])),
-      approvalDoubtFriendRequest: vi.fn(() => Promise.resolve()),
-      approvalFriendRequest: vi.fn(() => Promise.resolve()),
+      approvalDoubtFriendRequest: vi.fn(() => Promise.resolve({ errorCode: 0 })),
+      approvalFriendRequest: vi.fn(() => Promise.resolve({ errorCode: 0 })),
     },
     ntGroupApi: {
       getGroups: vi.fn(() => Promise.resolve([])),
-      getGroupMembers: vi.fn(() => Promise.resolve(new Map())),
-      getGroupRequest: vi.fn(() => Promise.resolve({ notifies: [], normalCount: 0 })),
-      handleGroupRequest: vi.fn(() => Promise.resolve()),
+      getGroupMembers: vi.fn(() => Promise.resolve([])),
+      getGroupNotifications: vi.fn(() => Promise.resolve({ nextStartSeq: 0, notifications: [] })),
+      setGroupRequest: vi.fn(() => Promise.resolve({ errorCode: 0 })),
     },
     ntSystemApi: {
       getDeviceInfo: vi.fn(() => Promise.resolve({ os: 'Linux', kernel: '5.4' })),
     },
     ntMsgApi: {
       getMsgsBySeqAndCount: vi.fn(() => Promise.resolve({ msgList: [] })),
-      getAioFirstViewLatestMsgs: vi.fn(() => Promise.resolve({ msgList: [] })),
+      getLatestMsgSeq: vi.fn(() => Promise.resolve(100)),
       sendMsg: vi.fn(() => Promise.resolve({ msgId: 'mock-msg-id' })),
     },
     ntUserApi: {
       getUinByUid: vi.fn(() => Promise.resolve('654321')),
       getUidByUin: vi.fn(() => Promise.resolve('mock-uid')),
-      getUserSimpleInfo: vi.fn(() => Promise.resolve({
+      getUserByUid: vi.fn(() => Promise.resolve({
         uid: 'mock-uid',
-        coreInfo: { nick: 'MockUser', remark: '' },
+        nick: 'MockUser',
+        remark: '',
       })),
     },
     ntFileApi: {
@@ -70,7 +71,11 @@ export function createMockContext() {
       error: vi.fn(),
       warn: vi.fn(),
     },
-    get: vi.fn((key: string) => services[key]),
+    // 模拟 cordis 的 ctx.get: 优先查 services, 回退到 ctx 自身属性 (如 emailNotification)
+    get: vi.fn((key: string) => {
+      const v = services[key]
+      return v !== undefined ? v : (ctx as any)[key]
+    }),
     on: vi.fn(() => vi.fn()),
     parallel: vi.fn(),
   } as any
