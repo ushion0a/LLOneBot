@@ -28,3 +28,27 @@ export function getSpecifiedUin(argv: string[] = process.argv): string | undefin
     }
     return undefined
 }
+
+export type Cdn = 'cf' | 'china'
+
+/**
+ * 解析接入点 CDN, 传给 SignProxy init。
+ * 优先级: argv `--cdn china` / `--cdn=china` > 环境变量 CDN > 默认 cf。
+ * 环境变量名 (CDN/cdn) 与值 (china/CHINA/...) 都大小写无关。
+ * cf (默认) = api-auth.luckylillia.com; china = llbot-api-auth.wumiao.wang。
+ * 非 cf/china 的值回退到 cf (SignProxy 侧还会再校验一次并对非法值报错)。
+ */
+export function getCdn(argv: string[] = process.argv, env: NodeJS.ProcessEnv = process.env): Cdn {
+    let raw: string | undefined
+    for (let i = 0; i < argv.length; i++) {
+        const a = argv[i]
+        if (a === '--cdn' && i + 1 < argv.length) { raw = argv[i + 1]; break }
+        if (a.startsWith('--cdn=')) { raw = a.slice('--cdn='.length); break }
+    }
+    // argv 未指定时回退环境变量; 变量名大小写无关 (CDN / cdn / Cdn 均可)
+    if (raw === undefined) {
+        const key = Object.keys(env).find(k => k.toLowerCase() === 'cdn')
+        if (key) raw = env[key]
+    }
+    return raw?.trim().toLowerCase() === 'china' ? 'china' : 'cf'
+}

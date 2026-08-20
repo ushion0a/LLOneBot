@@ -97,6 +97,8 @@ export interface InitArgs {
   machineGuidHex: string
   /** 当前账号 uin, 可选; 没有就等登录完成 SignProxy 自己绑. */
   uin?: number
+  /** 接入点 CDN: "cf" (默认) / "china". 决定 base_url + TLS pin. 不传按 cf. */
+  cdn?: string
 }
 
 /** 发包回调入参: 把 body relay 给 QQ 的 cmd. */

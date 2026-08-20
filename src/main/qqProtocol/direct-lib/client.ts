@@ -23,6 +23,8 @@ export interface DirectClientConfig {
   dataDir?: string
   /** 当前账号 uin, 可选. */
   uin?: number
+  /** 接入点 CDN: 'cf' (默认) / 'china'. 传给 SignProxy 决定 base_url + TLS pin. */
+  cdn?: string
 }
 
 const DEFAULT_CONFIG: DirectClientConfig = {
@@ -96,6 +98,7 @@ export class DirectProtocolClient extends EventEmitter {
       authToken: this.config.authToken,
       machineGuid: this.guid,
       uin: this.config.uin,
+      cdn: this.config.cdn,
       sendPacket: async ({ cmd, body }) => {
         const resp = (await this.sendCommand(cmd, Buffer.from(body))).payload
         logger.debug(`[relay] ${cmd}: req=${body.length}B resp=${resp.length}B hex=%h`, resp)
