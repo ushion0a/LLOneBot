@@ -20,6 +20,7 @@ import {
   getSessionFilePathForUin,
 } from './direct-lib'
 import type { QrCodeResult, QrPollResult } from './direct-lib'
+import { getCdn } from '@/common/utils/environment'
 import { overwriteMachineGuid, deleteMachineGuid, loadMachineGuidSync } from './direct-lib/machineGuid'
 import { updateAuthToken } from './direct-lib/sign'
 import { authTokenUtil } from '../config'
@@ -289,6 +290,7 @@ export class DirectQQProtocol extends QQProtocolBase {
         authToken,
         botVersion: `LLBot_${version}`,
         uin: uinArg,
+        cdn: getCdn(),
       })
       this.bindDirectClientEvents(this.directClient)
     } else {

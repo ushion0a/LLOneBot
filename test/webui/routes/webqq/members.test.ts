@@ -18,11 +18,11 @@ describe('members routes', () => {
     })
 
     it('returns sorted member list', async () => {
-      const infos = new Map([
-        ['uid1', { uid: 'uid1', uin: '111', nick: 'Admin', cardName: '', role: 2, memberRealLevel: 5, memberLevel: 0, memberSpecialTitle: '' }],
-        ['uid2', { uid: 'uid2', uin: '222', nick: 'Owner', cardName: 'Boss', role: 1, memberRealLevel: 10, memberLevel: 0, memberSpecialTitle: '' }],
-        ['uid3', { uid: 'uid3', uin: '333', nick: 'Member', cardName: '', role: 0, memberRealLevel: 1, memberLevel: 0, memberSpecialTitle: '' }],
-      ])
+      const infos = [
+        { uid: 'uid1', uin: 111, nick: 'Admin', cardName: '', role: 3, level: 5, specialTitle: '' },
+        { uid: 'uid2', uin: 222, nick: 'Owner', cardName: 'Boss', role: 4, level: 10, specialTitle: '' },
+        { uid: 'uid3', uin: 333, nick: 'Member', cardName: '', role: 2, level: 1, specialTitle: '' },
+      ]
       ctx.ntGroupApi.getGroupMembers.mockResolvedValue(infos)
       const app = createTestApp(createMembersRoutes(ctx))
 
@@ -53,9 +53,10 @@ describe('members routes', () => {
     })
 
     it('returns user info', async () => {
-      ctx.ntUserApi.getUserSimpleInfo.mockResolvedValue({
+      ctx.ntUserApi.getUserByUid.mockResolvedValue({
         uid: 'uid1',
-        coreInfo: { nick: 'TestUser', remark: 'friend' },
+        nick: 'TestUser',
+        remark: 'friend',
       })
       ctx.ntUserApi.getUinByUid.mockResolvedValue('111')
       const app = createTestApp(createMembersRoutes(ctx))
@@ -69,7 +70,7 @@ describe('members routes', () => {
     })
 
     it('returns 500 on error', async () => {
-      ctx.ntUserApi.getUserSimpleInfo.mockRejectedValue(new Error('fail'))
+      ctx.ntUserApi.getUserByUid.mockRejectedValue(new Error('fail'))
       const app = createTestApp(createMembersRoutes(ctx))
       const res = await app.request('/user-info?uid=uid1')
       expect(res.status).toBe(500)

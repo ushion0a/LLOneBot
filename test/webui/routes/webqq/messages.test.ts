@@ -45,7 +45,8 @@ describe('messages routes', () => {
     })
 
     it('fetches latest messages for group chat', async () => {
-      ctx.ntMsgApi.getAioFirstViewLatestMsgs.mockResolvedValue({
+      ctx.ntMsgApi.getLatestMsgSeq.mockResolvedValue(100)
+      ctx.ntMsgApi.getMsgsBySeqAndCount.mockResolvedValue({
         msgList: [
           { msgId: '1', msgTime: '200', elements: [] },
           { msgId: '2', msgTime: '100', elements: [] },
@@ -64,7 +65,7 @@ describe('messages routes', () => {
 
     it('converts peerId to uid for C2C chat', async () => {
       ctx.ntUserApi.getUidByUin.mockResolvedValue('uid-from-uin')
-      ctx.ntMsgApi.getAioFirstViewLatestMsgs.mockResolvedValue({ msgList: [] })
+      ctx.ntMsgApi.getMsgsBySeqAndCount.mockResolvedValue({ msgList: [] })
       const app = makeApp()
 
       await app.request('/messages?chatType=1&peerId=123456')

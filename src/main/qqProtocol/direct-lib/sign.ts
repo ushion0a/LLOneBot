@@ -28,6 +28,7 @@ export async function setupSign(opts: {
   authToken: string
   machineGuid: Buffer
   uin?: number
+  cdn?: string
   sendPacket: (p: RelayPacket) => Promise<Buffer>
   logger?: (log: SignLog) => void
 }): Promise<void> {
@@ -41,6 +42,7 @@ export async function setupSign(opts: {
         authToken: opts.authToken,
         machineGuidHex: opts.machineGuid.toString('hex'),
         uin: opts.uin,
+        cdn: opts.cdn,
       },
       opts.sendPacket,
       opts.logger ?? defaultLogger,

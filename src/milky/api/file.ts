@@ -24,7 +24,7 @@ import z from 'zod'
 import { defineApi, Failed, MilkyApiHandler, Ok } from '@/milky/common/api'
 import { resolveMilkyUri } from '@/milky/common/download'
 import { transformGroupFileList } from '@/milky/transform/entity'
-import { TEMP_DIR } from '@/common/globalVars'
+import { selfInfo, TEMP_DIR } from '@/common/globalVars'
 import { unlink, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import path from 'node:path'
@@ -84,7 +84,16 @@ const GetPrivateFileDownloadUrl = defineApi(
   GetPrivateFileDownloadUrlInput,
   GetPrivateFileDownloadUrlOutput,
   async (ctx, payload) => {
-    const result = await ctx.ntFileApi.getFileUrl(payload.file_id, false)
+    let uid
+    if (payload.is_self_send) {
+      uid = await ctx.ntUserApi.getUidByUin(payload.user_id)
+      if (!uid) {
+        return Failed(-404, 'User not found')
+      }
+    } else {
+      uid = selfInfo.uid
+    }
+    const result = await ctx.ntFileApi.getFileUrl(payload.file_id, false, uid)
     if (result.retCode !== 0) {
       return Failed(-500, result.retMsg)
     }
@@ -100,7 +109,7 @@ const GetGroupFileDownloadUrl = defineApi(
     const result = await ctx.ntFileApi.getFileUrl(
       payload.file_id,
       true,
-      payload.group_id
+      payload.group_id.toString()
     )
     if (result.retCode !== 0) {
       return Failed(-500, result.retMsg)
