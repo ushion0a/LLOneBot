@@ -272,6 +272,8 @@ export class MessageBuilding {
             preview = '[合并转发]'
           } else if (curr.elementType === ElementType.Reply) {
             preview = ''
+          } else if (curr.elementType === ElementType.File) {
+            preview = `[文件] ${curr.fileElement.fileName}`
           }
           return acc + preview
         }, '')

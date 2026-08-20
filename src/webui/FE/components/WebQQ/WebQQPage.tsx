@@ -82,7 +82,7 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
   const onMessageRecalledRef = React.useRef<((data: { msgId: string; msgSeq: string }) => void) | null>(null)
   // 消息队列：缓存在回调未就绪时收到的消息
   const pendingMessagesRef = React.useRef<RawMessage[]>([])
-  
+
   // 用于触发重新渲染的 state（当回调被设置时）
   const [, forceUpdate] = React.useState(0)
 
@@ -163,56 +163,56 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
   }, [contactsError])
 
   const currentChatRef = React.useRef(currentChat)
-  
+
   useEffect(() => {
     currentChatRef.current = currentChat
   }, [currentChat])
-  
+
   // 回调设置函数 - 直接更新 ref 并处理待处理消息
   const handleSetNewMessageCallback = React.useCallback((callback: ((msg: RawMessage) => void) | null) => {
     onNewMessageRef.current = callback
-    
+
     // 当回调就绪时，处理队列中的待处理消息
     if (callback && pendingMessagesRef.current.length > 0) {
       const messages = [...pendingMessagesRef.current]
       pendingMessagesRef.current = []
       messages.forEach(msg => callback(msg))
     }
-    
+
     forceUpdate(n => n + 1)
   }, [])
-  
+
   // 表情回应回调设置函数
   const handleSetEmojiReactionCallback = React.useCallback((callback: ((data: { groupCode: string; msgSeq: string; emojiId: string; userId: string; userName: string; isAdd: boolean }) => void) | null) => {
     onEmojiReactionRef.current = callback
   }, [])
-  
+
   // 消息撤回回调设置函数
   const handleSetMessageRecalledCallback = React.useCallback((callback: ((data: { msgId: string; msgSeq: string }) => void) | null) => {
     onMessageRecalledRef.current = callback
   }, [])
-  
+
   useEffect(() => {
     const eventSource = createEventSource(
       (data) => {
         if (data.type === 'message-created' || data.type === 'message-sent') {
           const rawMessage: RawMessage = data.data
-          
+
           // 验证消息有效性
           if (!rawMessage || !rawMessage.msgId || !rawMessage.elements || !Array.isArray(rawMessage.elements)) {
             console.warn('SSE 收到无效消息:', rawMessage)
             return
           }
-          
+
           const chatType = rawMessage.chatType as 1 | 2 | 100
           // peerUin 可能为空，优先用 peerUin，否则用 peerUid
           const peerId = rawMessage.peerUin || rawMessage.peerUid
           const chatKey = `${chatType}_${peerId}`
           const chat = currentChatRef.current
-          
+
           // 无论是否匹配当前聊天，都要缓存消息
-          appendCachedMessage(chatType, peerId, rawMessage)
-          
+          appendCachedMessage(chatType, peerId.toString(), rawMessage)
+
           if (chat && chat.chatType === chatType && chat.peerId === peerId) {
             if (onNewMessageRef.current) {
               onNewMessageRef.current(rawMessage)
@@ -223,13 +223,13 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
           } else {
             incrementUnreadCount(chatKey)
           }
-          
+
           const lastMessage = extractMessageSummary(rawMessage)
-          
+
           // 提取发送者信息用于创建新会话
           let peerName: string | undefined
           let peerAvatar: string | undefined
-          
+
           if (chatType === 2) {
             // 群聊使用群名称
             peerName = rawMessage.peerName || undefined
@@ -239,8 +239,8 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
             peerName = rawMessage.sendNickName || rawMessage.sendMemberName || undefined
             peerAvatar = `https://q1.qlogo.cn/g?b=qq&nk=${peerId}&s=640`
           }
-          
-          updateRecentChat(chatType, peerId, lastMessage, parseInt(rawMessage.msgTime) * 1000, peerName, peerAvatar)
+
+          updateRecentChat(chatType, peerId.toString(), lastMessage, rawMessage.msgTime * 1000, peerName, peerAvatar)
         } else if (data.type === 'emoji-reaction') {
           // 处理表情回应事件
           const { groupCode, msgSeq, emojiId, userId, userName, isAdd } = data.data
@@ -251,7 +251,7 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
 
           // 更新本地缓存
           updateCachedMessageEmojiReaction(2, groupCode, msgSeq, emojiId, isAdd)
-          
+
           // 只有当前聊天是该群时才更新 UI
           if (chat && chat.chatType === 2 && chat.peerId === groupCode) {
             if (onEmojiReactionRef.current) {
@@ -263,10 +263,10 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
           const { msgId, msgSeq, chatType, peerUid, peerUin } = data.data
           const peerId = peerUin || peerUid
           const chat = currentChatRef.current
-          
+
           // 更新本地缓存
           markCachedMessageAsRecalled(chatType, peerId, msgId, msgSeq)
-          
+
           // 只有当前聊天匹配时才更新 UI
           if (chat && chat.chatType === chatType && chat.peerId === peerId) {
             if (onMessageRecalledRef.current) {
@@ -326,7 +326,7 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
   const handleSelectChat = useCallback((session: ChatSession) => {
     // 切换聊天时清空待处理消息队列
     pendingMessagesRef.current = []
-    
+
     setCurrentChat(session)
     // 切换会话清掉文件定位目标, 避免残留到新会话
     setFileLocateTarget(null)
@@ -334,10 +334,10 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
       setShowMemberPanel(false)
       setShowFilePanel(false)
     }
-    
+
     const chatKey = `${session.chatType}_${session.peerId}`
     clearUnreadCount(chatKey)
-    
+
     setRecentChats(recentChats.map(item => {
       if (item.chatType === session.chatType && item.peerId === session.peerId) {
         return { ...item, unreadCount: 0 }
@@ -348,13 +348,13 @@ const WebQQPage: React.FC<{ isFullscreen?: boolean }> = ({ isFullscreen = false 
 
   // 移动端：是否显示聊天窗口（隐藏联系人列表）
   const [showChatOnMobile, setShowChatOnMobile] = useState(false)
-  
+
   // 移动端选择聊天后显示聊天窗口
   const handleSelectChatMobile = useCallback((session: ChatSession) => {
     handleSelectChat(session)
     setShowChatOnMobile(true)
   }, [handleSelectChat])
-  
+
   // 移动端返回联系人列表
   const handleBackToContacts = useCallback(() => {
     setShowChatOnMobile(false)

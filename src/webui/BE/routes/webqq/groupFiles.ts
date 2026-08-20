@@ -97,7 +97,7 @@ export function createGroupFilesRoutes(ctx: Context): Hono {
       if (!groupCode || !fileId) {
         return c.json({ success: false, message: '缺少必要参数' }, 400)
       }
-      const res = await ctx.ntFileApi.getFileUrl(fileId, true, +groupCode)
+      const res = await ctx.ntFileApi.getFileUrl(fileId, true, groupCode)
       if (res.retCode !== 0) {
         return c.json({ success: false, message: res.retMsg || '获取下载链接失败' }, 500)
       }

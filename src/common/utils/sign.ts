@@ -32,7 +32,7 @@ export class MusicSign {
     })
     const data = await resp.text()
     if (!resp.ok) throw new Error(data)
-    this.ctx.logger.info('音乐消息生成成功', data)
+    this.ctx.logger.info('音乐消息生成内容:', data)
     return data
   }
 }

@@ -22,7 +22,7 @@ export class GetGroupFileUrl extends BaseAction<Payload, Response> {
     const result = await this.ctx.ntFileApi.getFileUrl(
       payload.file_id,
       true,
-      +payload.group_id
+      payload.group_id.toString()
     )
     if (result.retCode !== 0) {
       throw new Error(result.retMsg)

@@ -358,7 +358,7 @@ export namespace Msg {
   })
 
   export const PushMsg = ProtoMessage.of({
-    message: ProtoField(1, Message)
+    message: ProtoField(1, 'bytes')
   })
 
   /** trpc.qq_new_tech.status_svc.StatusService.KickNT 推送：账号被踢下线 */

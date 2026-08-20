@@ -149,7 +149,7 @@ const GroupFilePanel: React.FC<GroupFilePanelProps> = ({ groupCode, onClose, loc
   const handleDownload = async (file: GroupFileItem) => {
     try {
       const url = await getGroupFileUrl(groupCode, file.fileId)
-      window.open(url, '_blank')
+      window.open(url + encodeURIComponent(file.fileName), '_blank')
     } catch (err) {
       showToast((err as Error).message || '获取下载链接失败', 'error')
     }
