@@ -1,5 +1,6 @@
 import { unlink } from 'node:fs/promises'
 import { Service, Context } from 'cordis'
+import { isDebugEnabled } from '@/common/logger'
 import { Config as LLOBConfig } from '../common/types'
 import {
   Peer,
@@ -120,7 +121,9 @@ class Core extends Service {
   ) {
     let groupMsgMask
     if (peer.chatType === ChatType.Group) {
+      const tGroup0 = Date.now()
       const info = await ctx.ntGroupApi.getGroup(+peer.peerUid, false)
+      if (isDebugEnabled()) ctx.logger('core').debug(`[timing] getGroup=${Date.now() - tGroup0}ms`)
       groupMsgMask = info.msgMask
       if (
         info.personShutupExpireTime * 1000 > Date.now()

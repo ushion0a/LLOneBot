@@ -1,4 +1,4 @@
-import { getLogger } from '@/common/logger'
+import { getLogger, isDebugEnabled } from '@/common/logger'
 import { TcpConnection } from './connection'
 import { buildServicePacket, buildServicePacket13, parseServicePacket, EncryptType, PacketContext, SsoPacket } from './packet'
 import { generateEcdhKeyPair, EcdhKeyPair } from './ecdh'
@@ -65,6 +65,12 @@ export class DirectProtocolClient extends EventEmitter {
   private signTokenRefreshInflight: Promise<void> | null = null
   private signTokenLastFetchAt = 0
   private heartbeatAliveTimer: NodeJS.Timeout | null = null
+  // 计时诊断: 按 seq 记响应帧「进 handlePacket」的时刻, 拆 wire vs parse.
+  private frameArriveAt: Map<number, number> = new Map()
+  // event loop lag 采样: setInterval 期望 50ms 一跳, 实测跳间隔 - 50 = 主线程被阻塞的量.
+  private maxLoopLag = 0
+  private loopLagTimer: NodeJS.Timeout | null = null
+  private lastLoopTick = 0
 
   constructor(config: Partial<DirectClientConfig> = {}) {
     super()
@@ -114,6 +120,7 @@ export class DirectProtocolClient extends EventEmitter {
     await this.ensureSignSetup()
     await this.conn.connect({ useIPv6: this.config.useIPv6 })
     this.emit('connected')
+    this.startLoopLagMonitor()
 
     // Send initial heartbeat (required before other commands)
     await this.sendHeartbeat()
@@ -136,6 +143,28 @@ export class DirectProtocolClient extends EventEmitter {
       clearInterval(this.heartbeatAliveTimer)
       this.heartbeatAliveTimer = null
     }
+  }
+
+  // 诊断用: 每 50ms 一跳, 记录实际间隔超出 50ms 的部分 = 主线程被同步阻塞的时长.
+  // native signRequest 若是同步阻塞调用, 会在这里体现, 且会推迟响应帧回调 (灌进 wire/netRTT).
+  // 只在 --debug 下开: 常驻 50ms setInterval 在生产会白费 CPU.
+  private startLoopLagMonitor(): void {
+    if (this.loopLagTimer || !isDebugEnabled()) return
+    const EXPECT = 50
+    this.lastLoopTick = Date.now()
+    this.loopLagTimer = setInterval(() => {
+      const now = Date.now()
+      const lag = now - this.lastLoopTick - EXPECT
+      if (lag > this.maxLoopLag) this.maxLoopLag = lag
+      this.lastLoopTick = now
+    }, EXPECT)
+    this.loopLagTimer.unref?.()
+  }
+
+  private takeMaxLoopLag(): number {
+    const v = this.maxLoopLag
+    this.maxLoopLag = 0
+    return v
   }
 
 
@@ -730,6 +759,10 @@ export class DirectProtocolClient extends EventEmitter {
     const ctx = this.getPacketContext()
     const enc = encryptType ?? (this.session ? EncryptType.EncryptD2Key : EncryptType.EncryptEmpty)
 
+    const t0 = Date.now()
+    let tTokenDone = t0
+    let tSignDone = t0
+
     let signResult: SignResult | null = null
     if (this.config.authToken && this.SIGN_ALLOWLIST.has(cmd)) {
       // uin 优先 session (登录成功后), 未登录时 fallback 到构造时传的 config.uin.
@@ -737,7 +770,9 @@ export class DirectProtocolClient extends EventEmitter {
       // 缺了它 sign 服务器会 400 'missing uin' 直接拒
       const uin = this.session?.uin ? Number(this.session.uin) : (this.config.uin || undefined)
       await this.ensureSignTokenFresh(uin)
+      tTokenDone = Date.now()
       signResult = await requestSign(cmd, payload, seq, this.guid, AppInfo.qua, uin, this.session?.signToken12B)
+      tSignDone = Date.now()
       if (signResult?.token.length === 0) {
         signResult.token = Buffer.from(this.session?.signToken12B ?? '')
       }
@@ -756,25 +791,41 @@ export class DirectProtocolClient extends EventEmitter {
       logger.debug(`[SSO send] ${cmd} seq=${seq} frame=${packet.length}B hex=%h`, packet)
     }
 
+    const tSendStart = Date.now()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingPackets.delete(seq)
         reject(new Error(`Command ${cmd} timed out after ${timeout}ms`))
       }, timeout)
 
-      this.pendingPackets.set(seq, { resolve, reject, timeout: timer })
+      const finish = (fn: (v: any) => void) => (v: any) => {
+        if (isDebugEnabled()) {
+          const tDone = Date.now()
+          const arrive = this.frameArriveAt.get(seq)
+          this.frameArriveAt.delete(seq)
+          const wire = arrive ? arrive - tSendStart : -1   // send -> 字节到达 socket (网络+服务端+event-loop 投递)
+          const parse = arrive ? tDone - arrive : -1        // 字节到达 -> resolve (解密/解析, 纯本地)
+          logger.debug(
+            `[timing] ${cmd} seq=${seq}: token=${tTokenDone - t0}ms sign=${tSignDone - tTokenDone}ms wire=${wire}ms parse=${parse}ms netRTT=${tDone - tSendStart}ms maxLoopLag=${this.takeMaxLoopLag()}ms total=${tDone - t0}ms`
+          )
+        }
+        fn(v)
+      }
+
+      this.pendingPackets.set(seq, { resolve: finish(resolve), reject: finish(reject), timeout: timer })
       this.conn.send(packet)
     })
   }
 
   private handlePacket(frame: Buffer): void {
+    const tArrive = Date.now()
     const d2Key = this.session?.d2Key || Buffer.alloc(16)
     const parsed = parseServicePacket(frame, d2Key)
     if (!parsed) {
       this.emit('error', new Error('Failed to parse incoming packet'))
       return
     }
-
+    if (isDebugEnabled()) this.frameArriveAt.set(parsed.seq, tArrive)
     const pending = this.pendingPackets.get(parsed.seq)
     if (pending) {
       clearTimeout(pending.timeout)

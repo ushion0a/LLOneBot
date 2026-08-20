@@ -7,6 +7,7 @@ import { createReadStream, promises as fsp } from 'node:fs'
 import { randomBytes } from 'node:crypto'
 import { getMd5BufferFromFile } from '@/common/utils/file'
 import { filterNullable, uint32ToIPV4Addr } from '@/common/utils'
+import { isDebugEnabled } from '@/common/logger'
 import { HighwayHttpSession } from '../helper/highway'
 import { MessageBuilding } from '../helper/messageBuilding'
 import { parseElements } from '../helper/messageParsing'
@@ -95,7 +96,9 @@ export class NTMsgApi extends Service {
     }
 
     const building = new MessageBuilding(this.ctx, msgElements, chatType, peer.peerUid)
+    const tBuild0 = Date.now()
     const { elems, content } = await building.build()
+    const tBuildDone = Date.now()
 
     // 群消息：server 会把消息原样回声（OlPush msgType=82）给发送方自己，
     //   contentHead.groupMsgSeqOrC2cClientSeq (field 5) 跟广播给群里所有人的相等。我们在 PbSendMsg 之前挂 listener、
@@ -133,6 +136,7 @@ export class NTMsgApi extends Service {
       random,
       content,
     })
+    const tPbSendDone = Date.now()
 
     if (ret.resultCode !== 0) {
       throw new Error(`发送消息失败 (code=${ret.resultCode}): ${ret.errMsg}`)
@@ -142,6 +146,12 @@ export class NTMsgApi extends Service {
     }
 
     const echoed = echoP ? await echoP : undefined
+    const tEchoDone = Date.now()
+    if (isDebugEnabled()) {
+      this.ctx.logger('ntMsgApi').debug(
+        `[timing] sendMsg: build=${tBuildDone - tBuild0}ms PbSendMsg=${tPbSendDone - tBuildDone}ms waitEcho=${tEchoDone - tPbSendDone}ms (isGroup=${isGroup}) total=${tEchoDone - tBuild0}ms`
+      )
+    }
 
     const result: RawMessage = echoed ?? {
       // C2C 本地算 msgUid（高 32 位固定 0x01000000，低 32 位 = random）
